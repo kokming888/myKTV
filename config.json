@@ -1,0 +1,27 @@
+{
+    "output_dir": "N:\\GitHub\\YTToMKV\\output",
+    "use_stable_ts": true,
+    "whisper_zh": {
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 1.8,
+        "temperature": [
+            0.0,
+            0.2,
+            0.4
+        ],
+        "beam_size": 5,
+        "nsp_skip": 0.85,
+        "logprob_skip": -1.5
+    },
+    "whisper_en": {
+        "no_speech_threshold": 0.55,
+        "compression_ratio_threshold": 1.35,
+        "temperature": [
+            0.0,
+            0.2
+        ],
+        "beam_size": 5,
+        "nsp_skip": 0.35,
+        "logprob_skip": -0.7
+    }
+}

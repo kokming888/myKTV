@@ -1,0 +1,5 @@
+('N:\\GitHub\\YTToMKV\\ai_libraries_directml',
+ 'ai_libraries_directml',
+ [],
+ 'DATA',
+ [])

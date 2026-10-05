@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YTToMKV | Song Library Mock</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f2f4ef;
+      --paper: #ffffff;
+      --paper-soft: #f8f9f6;
+      --ink: #242a27;
+      --muted: #77817b;
+      --line: #e4e8e2;
+      --green: #315d4d;
+      --green-dark: #234739;
+      --green-soft: #e8f1eb;
+      --coral: #d5644b;
+      --coral-soft: #fff0eb;
+      --yellow: #f1c968;
+      --shadow: 0 12px 34px rgba(40, 55, 46, .07);
+      --font: "Trebuchet MS", "Microsoft JhengHei", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 360px;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 13px;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app-shell { min-height: 100vh; display: grid; grid-template-columns: 228px minmax(500px, 1fr); }
+    .sidebar {
+      background: #fbfcf9;
+      border-right: 1px solid var(--line);
+      padding: 20px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .brand { display: flex; gap: 11px; align-items: center; padding: 0 8px; }
+    .brand-mark {
+      width: 38px; height: 38px; display: grid; place-items: center;
+      background: var(--green); color: white; border-radius: 11px;
+      font-size: 17px; font-weight: 800;
+    }
+    .brand-name { font-size: 14px; font-weight: 800; letter-spacing: 0; }
+    .brand-sub { color: var(--muted); font-size: 10px; margin-top: 3px; }
+    .nav-label { padding: 0 11px; margin: 0 0 7px; color: #909992; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-item {
+      width: 100%; border: 0; background: transparent; color: #55615a;
+      display: flex; align-items: center; gap: 10px; padding: 10px 11px;
+      border-radius: 7px; text-align: left; font-weight: 650;
+    }
+    .nav-item:hover { background: #f0f3ee; }
+    .nav-item.active { color: var(--green-dark); background: var(--green-soft); }
+    .nav-icon { width: 18px; text-align: center; font-size: 15px; }
+    .nav-count { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .language-list { display: grid; gap: 2px; }
+    .language-item { padding-left: 14px; font-weight: 550; }
+    .side-bottom { margin-top: auto; }
+    .storage-card { padding: 13px; background: #f1f5f1; border: 1px solid #e5ebe5; border-radius: 8px; }
+    .storage-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; font-weight: 750; }
+    .storage-top span:last-child { color: var(--muted); font-weight: 500; }
+    .storage-track { margin: 10px 0 6px; height: 5px; background: #dce5dd; overflow: hidden; border-radius: 99px; }
+    .storage-fill { height: 100%; width: 63%; background: var(--green); border-radius: inherit; }
+    .storage-path { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .main { min-width: 0; padding: 23px 25px 28px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
+    .crumb { color: var(--muted); font-size: 11px; }
+    .crumb strong { color: var(--ink); font-weight: 750; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .quiet-button, .outline-button, .primary-button, .icon-button {
+      border-radius: 6px; border: 1px solid var(--line); background: var(--paper); color: #39443d;
+      padding: 9px 12px; font-size: 11px; font-weight: 750; white-space: nowrap;
+    }
+    .quiet-button:hover, .outline-button:hover, .icon-button:hover { border-color: #b9c9bd; background: #fbfcfa; }
+    .primary-button { border-color: var(--green); background: var(--green); color: white; }
+    .primary-button:hover { background: var(--green-dark); }
+    .icon-button { width: 34px; height: 34px; padding: 0; font-size: 15px; }
+    .heading-row { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 16px; }
+    .eyebrow { color: var(--coral); font-size: 10px; font-weight: 850; letter-spacing: 1.3px; text-transform: uppercase; }
+    h1 { margin: 5px 0 4px; font-size: 25px; line-height: 1.2; letter-spacing: 0; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 12px; }
+    .stats { display: flex; gap: 8px; }
+    .stat { min-width: 104px; padding: 10px 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 7px; }
+    .stat strong { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .stat span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .toolbar {
+      display: flex; align-items: center; gap: 8px; padding: 11px;
+      background: var(--paper); border: 1px solid var(--line); border-radius: 8px 8px 0 0;
+    }
+    .searchbox { position: relative; flex: 1; min-width: 150px; }
+    .searchbox span { position: absolute; top: 9px; left: 11px; color: #8b958f; font-size: 14px; }
+    .searchbox input {
+      width: 100%; height: 35px; border: 1px solid var(--line); border-radius: 6px;
+      padding: 0 10px 0 34px; outline: none; background: #fcfdfb; color: var(--ink);
+    }
+    .searchbox input:focus, input:focus, select:focus { border-color: #719582; box-shadow: 0 0 0 3px rgba(49, 93, 77, .1); }
+    .filter-select { height: 35px; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; background: white; color: #48534c; }
+    .table-card { background: var(--paper); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .tagbar { display: flex; align-items: center; gap: 7px; padding: 11px 13px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+    .tagbar-label { color: var(--muted); font-size: 10px; font-weight: 750; margin-right: 2px; white-space: nowrap; }
+    .filter-chip { border: 1px solid var(--line); border-radius: 99px; padding: 5px 10px; background: white; color: #657069; font-size: 10px; white-space: nowrap; }
+    .filter-chip.selected { color: var(--green-dark); background: var(--green-soft); border-color: #c6d9cb; font-weight: 800; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    th { height: 37px; padding: 0 11px; text-align: left; color: #89938d; background: #fbfcfa; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; white-space: nowrap; }
+    td { height: 57px; padding: 7px 11px; border-top: 1px solid #eef0ed; vertical-align: middle; white-space: nowrap; }
+    tbody tr { transition: background .12s ease; cursor: pointer; }
+    tbody tr:hover { background: #fafcf9; }
+    tbody tr.selected-row { background: #f1f7f2; }
+    input[type="checkbox"] { accent-color: var(--green); width: 14px; height: 14px; vertical-align: middle; }
+    .song-title { max-width: 220px; overflow: hidden; text-overflow: ellipsis; font-weight: 750; }
+    .song-sub { margin-top: 4px; color: #8a948e; font-size: 10px; }
+    .artist { color: #4e5b53; font-size: 11px; }
+    .lang-pill { display: inline-block; border-radius: 4px; background: #f1f3ef; color: #59665e; padding: 4px 6px; font-size: 10px; }
+    .tags { display: flex; align-items: center; gap: 4px; }
+    .tag { display: inline-block; border-radius: 4px; padding: 4px 6px; background: #f3f4f1; color: #636e67; font-size: 9px; }
+    .tag.pop { background: #e9f2eb; color: #38614a; }
+    .tag.live { background: #fff0e9; color: #a54f38; }
+    .tag.duet { background: #f3eff8; color: #70588a; }
+    .duration { color: #657069; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .row-status { color: #678471; font-size: 10px; }
+    .bulkbar { display: none; align-items: center; gap: 8px; padding: 9px 12px; background: #f2f7f3; border-bottom: 1px solid var(--line); }
+    .bulkbar.visible { display: flex; }
+    .bulk-count { margin-right: auto; color: var(--green-dark); font-weight: 800; font-size: 11px; }
+    .bulkbar button { padding: 6px 9px; border: 1px solid #d7e3da; border-radius: 5px; color: #3d5948; background: white; font-size: 10px; font-weight: 750; }
+    .no-results { display: none; padding: 34px; color: var(--muted); text-align: center; }
+    .lower-note { display: flex; justify-content: space-between; gap: 15px; color: var(--muted); font-size: 10px; padding: 11px 3px; }
+    .lower-note strong { color: #58665d; }
+
+    .modal-backdrop { position: fixed; inset: 0; display: none; place-items: center; padding: 18px; background: rgba(28, 39, 32, .35); z-index: 5; }
+    .modal-backdrop.open { display: grid; }
+    .modal { width: min(470px, 100%); background: white; border-radius: 9px; box-shadow: 0 24px 70px rgba(19, 33, 25, .2); padding: 20px; }
+    .modal-head { display: flex; justify-content: space-between; align-items: start; }
+    .modal h2 { margin: 0; font-size: 17px; }
+    .modal p { margin: 6px 0 16px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .modal-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; }
+    .field-label { display: block; color: #647068; font-size: 10px; font-weight: 800; margin: 13px 0 6px; }
+    .modal input, .modal select { width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 5px; padding: 0 9px; }
+    .tag-options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-option { border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; background: white; color: #5d6861; font-size: 10px; }
+    .tag-option.active { border-color: #9dbca7; background: var(--green-soft); color: var(--green-dark); }
+    .path-preview { background: #f5f7f4; border: 1px solid var(--line); border-radius: 5px; padding: 10px; color: #4e6155; font-family: Consolas, monospace; font-size: 10px; overflow-wrap: anywhere; }
+    .modal-actions { display: flex; justify-content: end; gap: 8px; margin-top: 18px; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 14px); opacity: 0; pointer-events: none; padding: 10px 14px; background: #263d31; color: white; border-radius: 6px; font-size: 11px; transition: .2s ease; z-index: 10; box-shadow: var(--shadow); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 1120px) {
+      .app-shell { grid-template-columns: 190px minmax(500px, 1fr); }
+      .main { padding: 19px 17px 24px; }
+      .stats { gap: 5px; }
+      .stat { min-width: 88px; padding: 9px; }
+    }
+    @media (max-width: 760px) {
+      .app-shell { display: block; }
+      .sidebar { padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); gap: 12px; }
+      .brand { padding-left: 3px; }
+      .sidebar > section { display: none; }
+      .sidebar > section:first-of-type { display: block; }
+      .nav-label { display: none; }
+      .nav-list { display: flex; overflow-x: auto; }
+      .nav-item { width: auto; flex: 0 0 auto; padding: 8px 10px; }
+      .nav-count { display: none; }
+      .language-list { display: none; }
+      .side-bottom { display: none; }
+      .main { padding: 16px 12px 22px; }
+      .topline { margin-bottom: 17px; }
+      .heading-row { display: block; }
+      .stats { margin-top: 12px; }
+      .stat { flex: 1; }
+      .toolbar { flex-wrap: wrap; }
+      .searchbox { flex-basis: 100%; }
+      .toolbar .outline-button { flex: 1; }
+      .lower-note { display: block; line-height: 1.7; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">唱</div>
+        <div><div class="brand-name">YTToMKV</div><div class="brand-sub">KARAOKE LIBRARY</div></div>
+      </div>
+      <section>
+        <p class="nav-label">Library / 曲庫</p>
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="all"><span class="nav-icon">▦</span>All songs<span class="nav-count">248</span></button>
+          <button class="nav-item" data-view="inbox"><span class="nav-icon">↓</span>Download inbox<span class="nav-count">12</span></button>
+          <button class="nav-item" data-view="untagged"><span class="nav-icon">◷</span>Needs organizing<span class="nav-count">18</span></button>
+          <button class="nav-item" data-view="favorites"><span class="nav-icon">☆</span>Favorites<span class="nav-count">36</span></button>
+        </nav>
+      </section>
+      <section>
+        <p class="nav-label">By language / 語言</p>
+        <nav class="nav-list language-list">
+          <button class="nav-item language-item" data-language="Mandarin"><span class="nav-icon">國</span>Mandarin 國語<span class="nav-count">102</span></button>
+          <button class="nav-item language-item" data-language="Cantonese"><span class="nav-icon">粵</span>Cantonese 粵語<span class="nav-count">54</span></button>
+          <button class="nav-item language-item" data-language="Hokkien"><span class="nav-icon">閩</span>Hokkien 福建<span class="nav-count">21</span></button>
+          <button class="nav-item language-item" data-language="Malay"><span class="nav-icon">馬</span>Malay 馬來語<span class="nav-count">28</span></button>
+          <button class="nav-item language-item" data-language="English"><span class="nav-icon">EN</span>English 英文<span class="nav-count">31</span></button>
+          <button class="nav-item language-item" data-language="Other"><span class="nav-icon">+</span>Other 其他<span class="nav-count">12</span></button>
+        </nav>
+      </section>
+      <section>
+        <p class="nav-label">Folders / 資料夾</p>
+        <nav class="nav-list">
+          <button class="nav-item" id="folderButton"><span class="nav-icon">▸</span>Library folder<span class="nav-count">⌄</span></button>
+        </nav>
+      </section>
+      <div class="side-bottom">
+        <div class="storage-card">
+          <div class="storage-top"><span>Library storage</span><span>126 / 200 GB</span></div>
+          <div class="storage-track"><div class="storage-fill"></div></div>
+          <div class="storage-path">D:\KTV_Library\Library</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topline">
+        <div class="crumb">YTToMKV <span> / </span> <strong>Song management</strong></div>
+        <div class="top-actions">
+          <button class="quiet-button" id="helpButton">?&nbsp; Help</button>
+          <button class="icon-button" id="settingsButton" title="Library settings" aria-label="Library settings">⚙</button>
+        </div>
+      </div>
+      <div class="heading-row">
+        <div>
+          <div class="eyebrow">Library administration</div>
+          <h1>Song management <span style="font-size:18px;color:#77817b;font-weight:500">/ 歌曲管理</span></h1>
+          <p class="subtitle">Review downloads, organize your collection, and add searchable tags.</p>
+        </div>
+        <div class="stats">
+          <div class="stat"><strong>248</strong><span>Songs in library</span></div>
+          <div class="stat"><strong>12</strong><span>To review</span></div>
+          <div class="stat"><strong>18</strong><span>Untagged</span></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <label class="searchbox"><span>⌕</span><input id="searchInput" type="search" placeholder="Search title, artist, language, or tag..." aria-label="Search songs"></label>
+        <select class="filter-select" id="languageFilter" aria-label="Filter by language">
+          <option value="">All languages</option><option>Mandarin</option><option>Cantonese</option><option>Hokkien</option><option>Malay</option><option>English</option><option>Other</option>
+        </select>
+        <button class="outline-button" id="scanButton">↻&nbsp; Scan folders</button>
+        <button class="outline-button" id="inboxButton">↓&nbsp; Review inbox</button>
+        <button class="primary-button" id="addFolderButton">＋&nbsp; Add folder</button>
+      </div>
+      <section class="table-card" aria-label="Song library">
+        <div class="bulkbar" id="bulkbar">
+          <span class="bulk-count" id="bulkCount">0 selected</span>
+          <button id="bulkTags">＋ Add tags</button><button id="bulkMove">↗ Move to folder</button><button id="bulkRemove">Remove from library</button>
+        </div>
+        <div class="tagbar">
+          <span class="tagbar-label">QUICK TAGS</span>
+          <button class="filter-chip selected" data-tag="">All</button>
+          <button class="filter-chip" data-tag="Pop">Pop</button>
+          <button class="filter-chip" data-tag="Band">Band</button>
+          <button class="filter-chip" data-tag="Duet">Duet</button>
+          <button class="filter-chip" data-tag="Concert">Concert / Live</button>
+          <button class="filter-chip" data-tag="Ballad">Ballad</button>
+          <button class="filter-chip" id="manageTags">＋ Manage tags</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:36px"><input id="selectAll" type="checkbox" aria-label="Select all visible songs"></th>
+              <th>Song title</th><th>Artist</th><th>Language</th><th>Tags</th><th>Length</th><th>Location status</th>
+            </tr></thead>
+            <tbody id="songRows"></tbody>
+          </table>
+          <div class="no-results" id="noResults">No songs match these filters.</div>
+        </div>
+      </section>
+      <div class="lower-note"><span><strong id="resultCount">Showing 6 of 248 songs</strong> &nbsp;·&nbsp; Select songs for bulk tagging or folder changes.</span><span>Catalog search is local; your media files stay in your library folder.</span></div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" role="presentation">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><h2 id="modalTitle">Edit song</h2><button class="modal-x" id="closeModal" aria-label="Close">×</button></div>
+      <p id="modalDescription">Update song details, tags, or its organized destination.</p>
+      <div id="modalContent"></div>
+      <div class="modal-actions"><button class="outline-button" id="cancelModal">Cancel</button><button class="primary-button" id="confirmModal">Save changes</button></div>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const songs = [
+      {id:1,title:"Ye Qu / 夜曲",artist:"Jay Chou 周杰倫",language:"Mandarin",duration:"04:07",tags:["Pop","Ballad"],file:"Jay Chou - Ye Qu [yt-9bZkp7q19f0].mp4",letter:"Y",status:"Organized"},
+      {id:2,title:"月亮代表我的心",artist:"Teresa Teng 鄧麗君",language:"Mandarin",duration:"03:29",tags:["Pop","Classic"],file:"Teresa Teng - 月亮代表我的心 [local-042].mp4",letter:"Y",status:"Organized"},
+      {id:3,title:"海闊天空",artist:"Beyond",language:"Cantonese",duration:"05:21",tags:["Band","Rock","Concert"],file:"Beyond - 海闊天空 [yt-a83kd20].mp4",letter:"H",status:"Organized"},
+      {id:4,title:"朋友",artist:"周華健 Wakin Chau",language:"Mandarin",duration:"04:12",tags:["Pop","Band"],file:"Wakin Chau - 朋友 [yt-friends88].mp4",letter:"P",status:"Needs tags"},
+      {id:5,title:"A Thousand Years",artist:"Christina Perri",language:"English",duration:"04:45",tags:["Pop","Duet","Love"],file:"Christina Perri - A Thousand Years [yt-a1000].mp4",letter:"A",status:"Organized"},
+      {id:6,title:"Rasa Sayang",artist:"Traditional",language:"Malay",duration:"02:58",tags:["Folk","Group"],file:"Traditional - Rasa Sayang [local-117].mp4",letter:"R",status:"Needs tags"},
+      {id:7,title:"千千闋歌",artist:"陳慧嫻 Priscilla Chan",language:"Cantonese",duration:"04:55",tags:["Pop","Concert","Ballad"],file:"Priscilla Chan - 千千闋歌 [yt-cc7721].mp4",letter:"Q",status:"Organized"},
+      {id:8,title:"朋友",artist:"譚詠麟 Alan Tam",language:"Cantonese",duration:"04:18",tags:["Duet","Classic"],file:"Alan Tam - 朋友 [yt-at8812].mp4",letter:"P",status:"Organized"}
+    ];
+    let selectedSong = songs[0];
+    let activeTag = "";
+    let activeView = "all";
+    const rows = document.getElementById("songRows");
+    const search = document.getElementById("searchInput");
+    const langFilter = document.getElementById("languageFilter");
+    const bulkbar = document.getElementById("bulkbar");
+    const backdrop = document.getElementById("modalBackdrop");
+    const toast = document.getElementById("toast");
+    let toastTimer;
+
+    function tagClass(tag) {
+      if (tag === "Pop") return "pop";
+      if (tag === "Concert" || tag === "Live") return "live";
+      if (tag === "Duet") return "duet";
+      return "";
+    }
+    function visibleSongs() {
+      const query = search.value.trim().toLowerCase();
+      const language = langFilter.value;
+      return songs.filter(song => {
+        const matchesQuery = !query || [song.title,song.artist,song.language,song.tags.join(" "),song.file].join(" ").toLowerCase().includes(query);
+        const matchesTag = !activeTag || song.tags.includes(activeTag);
+        const matchesLanguage = !language || song.language === language;
+        const matchesView = activeView !== "untagged" || song.status === "Needs tags";
+        return matchesQuery && matchesTag && matchesLanguage && matchesView;
+      });
+    }
+    function render() {
+      const filtered = visibleSongs();
+      rows.innerHTML = filtered.map(song => `
+        <tr data-id="${song.id}" class="${selectedSong && selectedSong.id === song.id ? "selected-row" : ""}">
+          <td><input class="row-check" type="checkbox" data-id="${song.id}" aria-label="Select ${song.title}"></td>
+          <td><div class="song-title">${song.title}</div><div class="song-sub">${song.file}</div></td>
+          <td class="artist">${song.artist}</td><td><span class="lang-pill">${song.language}</span></td>
+          <td><div class="tags">${song.tags.slice(0,3).map(tag => `<span class="tag ${tagClass(tag)}">${tag}</span>`).join("")}</div></td>
+          <td class="duration">${song.duration}</td><td class="row-status">${song.status === "Organized" ? "✓ " : "◷ "}${song.status}</td>
+        </tr>`).join("");
+      document.getElementById("noResults").style.display = filtered.length ? "none" : "block";
+      document.getElementById("resultCount").textContent = `Showing ${filtered.length} of 248 songs`;
+      rows.querySelectorAll("tr").forEach(row => row.addEventListener("click", event => {
+        if (event.target.type === "checkbox") return;
+        selectedSong = songs.find(song => song.id === Number(row.dataset.id));
+        render();
+        showToast(`Selected ${selectedSong.title}`);
+      }));
+      rows.querySelectorAll(".row-check").forEach(check => check.addEventListener("change", updateSelection));
+      document.getElementById("selectAll").checked = filtered.length > 0 && filtered.every(song => document.querySelector(`.row-check[data-id="${song.id}"]`)?.checked);
+    }
+    function selectedIds() { return [...document.querySelectorAll(".row-check:checked")].map(check => Number(check.dataset.id)); }
+    function updateSelection() {
+      const count = selectedIds().length;
+      bulkbar.classList.toggle("visible", count > 0);
+      document.getElementById("bulkCount").textContent = `${count} song${count === 1 ? "" : "s"} selected`;
+      document.getElementById("selectAll").checked = visibleSongs().length > 0 && visibleSongs().every(song => document.querySelector(`.row-check[data-id="${song.id}"]`)?.checked);
+    }
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+    function closeModal() { backdrop.classList.remove("open"); }
+    function openModal(title, description, body, confirmLabel, onConfirm) {
+      document.getElementById("modalTitle").textContent = title;
+      document.getElementById("modalDescription").textContent = description;
+      document.getElementById("modalContent").innerHTML = body;
+      document.getElementById("confirmModal").textContent = confirmLabel;
+      backdrop.classList.add("open");
+      document.getElementById("confirmModal").onclick = () => { onConfirm(); closeModal(); };
+    }
+    function openMoveModal(songList) {
+      const song = songList[0] || selectedSong;
+      const folderBody = `<label class="field-label" for="destinationLanguage">Language folder</label>
+        <select id="destinationLanguage">${["Mandarin","Cantonese","Hokkien","Malay","English","Other"].map(language => `<option ${song.language === language ? "selected" : ""}>${language}</option>`).join("")}</select>
+        <label class="field-label">Destination preview</label>
+        <div class="path-preview" id="pathPreview">D:\\KTV_Library\\Library\\${song.language}\\${song.letter}\\${song.artist.split(" ")[0]}\\${song.file}</div>`;
+      openModal("Organize song files", "Choose a destination. The preview shows the proposed library path; files are not moved in this mock.", folderBody, songList.length > 1 ? "Move selected" : "Move song", () => showToast("Mock only: destination preview confirmed"));
+      document.getElementById("destinationLanguage").addEventListener("change", event => {
+        document.getElementById("pathPreview").textContent = `D:\\KTV_Library\\Library\\${event.target.value}\\${song.letter}\\${song.artist.split(" ")[0]}\\${song.file}`;
+      });
+    }
+    function openTagModal(songList) {
+      const names = ["Pop","Rock","Ballad","Band","Duet","Group","Concert","Live","Acoustic","Classic","Love","Party","Folk"];
+      const current = songList.length === 1 ? songList[0].tags : [];
+      const tagBody = `<span class="field-label">Select tags</span><div class="tag-options">${names.map(tag => `<button type="button" class="tag-option ${current.includes(tag) ? "active" : ""}" data-tag-option="${tag}">${tag}</button>`).join("")}</div>
+        <label class="field-label" for="customTag">Add a custom tag</label><input id="customTag" placeholder="e.g. Wedding, 90s, High energy">`;
+      openModal("Tag songs", songList.length > 1 ? `Apply tags to ${songList.length} selected songs.` : `Add searchable tags for ${songList[0].title}.`, tagBody, "Apply tags", () => {
+        const chosen = [...document.querySelectorAll(".tag-option.active")].map(button => button.dataset.tagOption);
+        const custom = document.getElementById("customTag").value.trim();
+        if (custom) chosen.push(custom);
+        songList.forEach(song => { song.tags = [...new Set([...song.tags,...chosen])]; if (song.status === "Needs tags") song.status = "Organized"; });
+        render();
+        showToast(`Tags updated for ${songList.length} song${songList.length === 1 ? "" : "s"}`);
+      });
+      document.querySelectorAll(".tag-option").forEach(button => button.addEventListener("click", () => button.classList.toggle("active")));
+    }
+
+    search.addEventListener("input", render);
+    langFilter.addEventListener("change", render);
+    document.querySelectorAll(".filter-chip[data-tag]").forEach(button => button.addEventListener("click", () => {
+      activeTag = button.dataset.tag;
+      document.querySelectorAll(".filter-chip[data-tag]").forEach(chip => chip.classList.toggle("selected", chip === button));
+      render();
+    }));
+    document.querySelectorAll(".nav-item[data-view]").forEach(button => button.addEventListener("click", () => {
+      document.querySelectorAll(".nav-item[data-view]").forEach(item => item.classList.toggle("active", item === button));
+      activeView = button.dataset.view;
+      if (activeView === "inbox") { showToast("Inbox preview: 12 downloads awaiting review"); activeView = "all"; }
+      if (activeView === "favorites") { showToast("Favorites view preview"); activeView = "all"; }
+      render();
+    }));
+    document.querySelectorAll(".nav-item[data-language]").forEach(button => button.addEventListener("click", () => {
+      langFilter.value = button.dataset.language;
+      document.querySelectorAll(".nav-item[data-view]").forEach(item => item.classList.remove("active"));
+      render();
+    }));
+    document.getElementById("selectAll").addEventListener("change", event => {
+      visibleSongs().forEach(song => { const checkbox = document.querySelector(`.row-check[data-id="${song.id}"]`); if (checkbox) checkbox.checked = event.target.checked; });
+      updateSelection();
+    });
+    document.getElementById("bulkTags").addEventListener("click", () => openTagModal(songs.filter(song => selectedIds().includes(song.id))));
+    document.getElementById("bulkMove").addEventListener("click", () => openMoveModal(songs.filter(song => selectedIds().includes(song.id))));
+    document.getElementById("bulkRemove").addEventListener("click", () => showToast("Mock only: selected songs remain in the library"));
+    document.getElementById("manageTags").addEventListener("click", () => openTagModal([selectedSong]));
+    document.getElementById("inboxButton").addEventListener("click", () => openModal("Download inbox", "Twelve downloaded files are waiting for review before they enter the library.", `<div class="path-preview">New download · title and artist detected<br>Choose language, add tags, then confirm the destination folder.</div>`, "Review next song", () => showToast("Mock only: inbox workflow preview")));
+    document.getElementById("addFolderButton").addEventListener("click", () => openModal("Add a library folder", "Choose a folder to scan for karaoke media. Existing files are indexed, not moved.", `<label class="field-label" for="folderPath">Folder path</label><input id="folderPath" value="D:\\KTV_Library\\Library" placeholder="Choose a folder...">`, "Scan folder", () => showToast("Mock only: folder scan started")));
+    document.getElementById("scanButton").addEventListener("click", () => showToast("Mock only: folder scan preview"));
+    document.getElementById("folderButton").addEventListener("click", () => showToast("Library root: D:\\KTV_Library\\Library"));
+    document.getElementById("settingsButton").addEventListener("click", () => showToast("Library settings preview"));
+    document.getElementById("helpButton").addEventListener("click", () => showToast("Select songs to bulk-tag or preview a destination"));
+    document.getElementById("closeModal").addEventListener("click", closeModal);
+    document.getElementById("cancelModal").addEventListener("click", closeModal);
+    backdrop.addEventListener("click", event => { if (event.target === backdrop) closeModal(); });
+    document.addEventListener("keydown", event => { if (event.key === "Escape") closeModal(); });
+    render();
+  </script>
+</body>
+</html>
