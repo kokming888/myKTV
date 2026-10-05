@@ -8,6 +8,13 @@ Version: 1.0
 
 MyKTV 1.0 is the first release under the MyKTV name, continuing the YTToMKV codebase. It provides a Windows workflow for YouTube and local media, AI vocal separation, lyric recognition, subtitle alignment, song-library organization, KTV selection, and output merging.
 
+## Credits
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## Product scope
 
 This release targets users who want to:
@@ -46,7 +53,7 @@ This release targets users who want to:
 
 The application is intended to run directly from the project directory. It creates and uses local service directories to host FFmpeg, AI libraries, and downloaded model files.
 
-Build the onedir executable with `MyKTV.spec`. Previous YTToMKV source snapshots and packaging output are retained under `archive/`.
+Build the onedir executable with `MyKTV.spec`. Previous YTToMKV source snapshots and packaging output are retained under `archived/`.
 
 ## Risk and limitation notes
 

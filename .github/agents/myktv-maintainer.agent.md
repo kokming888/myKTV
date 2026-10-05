@@ -25,7 +25,7 @@ Keep the Windows desktop utility stable, usable, and safe to package and distrib
 - Entry point: `MyKTV.py`
 - Song organization: `myktv_song_manager.py`
 - KTV selection/playback: `myktv_ktv_selection.py`
-- Historical YTToMKV scripts and old packaging artifacts are under `archive/`.
+- Historical YTToMKV scripts and old packaging artifacts are under `archived/`.
 - The app expects local runtime directories for packaged execution.
 - Current `dist/` and `build/` output is generated and should not be treated as source.
 

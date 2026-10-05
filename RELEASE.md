@@ -2,7 +2,14 @@
 
 ## Version 1.0
 
-MyKTV 1.0 is the first release under the MyKTV name. It continues the YTToMKV project and uses [MyKTV.py](MyKTV.py) as its entry point. Historical YTToMKV scripts and packaging output are preserved in [archive](archive/README.md).
+MyKTV 1.0 is the first release under the MyKTV name. It continues the YTToMKV project and uses [MyKTV.py](MyKTV.py) as its entry point. Historical YTToMKV scripts and packaging output are preserved in [archived](archived/README.md).
+
+## Credits
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
 
 ## Highlights
 

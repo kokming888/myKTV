@@ -6,6 +6,13 @@ Version 1.0
 
 MyKTV helps you turn YouTube videos or local songs into karaoke-style videos with lyrics.
 
+## Credits
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## What you can do
 
 - download videos or audio from YouTube

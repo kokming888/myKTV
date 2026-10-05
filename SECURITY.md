@@ -12,6 +12,13 @@ The application is not clearly malicious, but it does perform several actions th
 - it prepends local runtime folders to PATH and PYTHONPATH,
 - it executes tools on user-selected media and remote URLs.
 
+## Credits and project origin
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 These features are useful for convenience, but they also widen the trust boundary.
 
 ## Risk areas

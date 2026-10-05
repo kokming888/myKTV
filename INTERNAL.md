@@ -4,6 +4,13 @@
 
 This repository contains a Windows desktop utility for YouTube download, local media processing, vocal separation, subtitle generation, and KTV-style video output. The primary implementation is in [MyKTV.py](MyKTV.py).
 
+## Credits and project origin
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## Project architecture
 
 The application entry point is `MyKTVApp`. Song organization and KTV selection are separated into `SongManagerViewMixin` and `KtvSelectionMixin` modules. The app manages:

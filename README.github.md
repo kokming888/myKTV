@@ -28,6 +28,13 @@ MyKTV is a local media-processing workflow that combines:
 - Organize downloads in a searchable song library
 - Browse by language and tags, build a queue, and play songs from the KTV Selection tab
 
+## Credits
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## Project status
 
 This repo contains a Windows GUI application built around the main script:
@@ -79,7 +86,7 @@ No explicit license file was found in the repo. If this project is being shared 
 - [README.md](README.md) — general usage overview
 - [RELEASE.md](RELEASE.md) — release notes
 - [TECHNICAL.md](TECHNICAL.md) — architecture and implementation notes
-- [archive/README.md](archive/README.md) — archived YTToMKV scripts and previous build artifacts
+- [archived/README.md](archived/README.md) — archived YTToMKV scripts and previous build artifacts
 
 ## Summary
 

@@ -14,7 +14,7 @@ Keep the app stable, usable, and easy to maintain as a Windows desktop media-pro
 
 - Confirm the active source file before editing.
 - Treat `MyKTV.py` as the entry point; screen modules are `myktv_song_manager.py` and `myktv_ktv_selection.py`.
-- Historical YTToMKV source snapshots and packaging output live under `archive/`.
+- Historical YTToMKV source snapshots and packaging output live under `archived/`.
 
 ### 2. Identify the affected subsystem
 

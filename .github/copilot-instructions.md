@@ -4,7 +4,7 @@
 
 This repository contains a Windows desktop utility for YouTube download, local media conversion, AI vocal separation, lyric recognition, KTV subtitle generation, and final media merge.
 
-The active entry point is `MyKTV.py` (version 1.0). Song organization lives in `myktv_song_manager.py`; KTV selection and playback live in `myktv_ktv_selection.py`. Historical YTToMKV scripts and previous packaging output are preserved under `archive/` and are not active source.
+The active entry point is `MyKTV.py` (version 1.0). Song organization lives in `myktv_song_manager.py`; KTV selection and playback live in `myktv_ktv_selection.py`. Historical YTToMKV scripts and previous packaging output are preserved under `archived/` and are not active source.
 
 ## Working rules
 

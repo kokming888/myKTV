@@ -19,6 +19,13 @@ This project is a GUI-based workflow for:
 
 It is designed for users who want to produce karaoke-ready content from songs, music videos, or local media files.
 
+## Credits
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## Features
 
 ### YouTube workflow
@@ -62,7 +69,7 @@ It is designed for users who want to produce karaoke-ready content from songs, m
 - [myktv_song_manager.py](myktv_song_manager.py) — song catalog, tagging, scanning, and file organization
 - [myktv_ktv_selection.py](myktv_ktv_selection.py) — karaoke browsing, play queue, and playback
 - [MyKTV.spec](MyKTV.spec) — PyInstaller onedir build configuration
-- Historical YTToMKV scripts and build artifacts are preserved under [archive](archive/README.md)
+- Historical YTToMKV scripts and build artifacts are preserved under [archived](archived/README.md)
 
 ## Supported environment
 

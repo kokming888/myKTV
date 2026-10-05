@@ -4,6 +4,13 @@
 
 This project is a Windows desktop application for media processing and karaoke subtitle creation. [MyKTV.py](MyKTV.py) is the entry point; `MyKTVApp` composes the core application with screen mixins from [myktv_song_manager.py](myktv_song_manager.py) and [myktv_ktv_selection.py](myktv_ktv_selection.py).
 
+## Credits and project origin
+
+MyKTV was started from the code base of YT2MKV, originally developed by David Chang.
+
+- LINE ID: `game76420`
+- Facebook: [David Chang's Facebook page](https://www.facebook.com/share/p/1BHjRR3yfB/)
+
 ## Entry point
 
 The script starts with a traditional Tkinter startup sequence:
