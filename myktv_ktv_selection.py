@@ -342,6 +342,331 @@ class KtvSelectionMixin:
         self._draw_video_canvas_screen()
         self._render_ktv_library()
 
+    def build_discover_tab(self, parent):
+        colors = {
+            "bg": "#100B23",
+            "panel": "#19132F",
+            "panel_alt": "#241B40",
+            "line": "#352B50",
+            "text": "#F8F6FF",
+            "muted": "#A9A2C0",
+            "purple": "#9B6BFF",
+            "pink": "#FF6B9F",
+            "mint": "#80E9D2",
+        }
+        self.discover_colors = colors
+        parent.configure(bg=colors["bg"])
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(3, weight=1)
+
+        style = ttk.Style(parent)
+        style.configure(
+            "Discover.Treeview",
+            background=colors["panel"],
+            foreground=colors["text"],
+            fieldbackground=colors["panel"],
+            rowheight=32,
+            borderwidth=0,
+            font=("Arial", 9),
+        )
+        style.configure(
+            "Discover.Treeview.Heading",
+            background=colors["panel_alt"],
+            foreground=colors["muted"],
+            relief="flat",
+            font=("Arial", 8, "bold"),
+            padding=(6, 7),
+        )
+        style.map(
+            "Discover.Treeview",
+            background=[("selected", "#50377D")],
+            foreground=[("selected", colors["text"])],
+        )
+
+        header = tk.Frame(parent, bg=colors["bg"])
+        header.grid(row=0, column=0, sticky="ew", padx=20, pady=(16, 12))
+        header.columnconfigure(0, weight=1)
+        title_group = tk.Frame(header, bg=colors["bg"])
+        title_group.grid(row=0, column=0, sticky="w")
+        tk.Label(title_group, text="Find your next sing-along", bg=colors["bg"], fg=colors["text"],
+                 font=("Arial", 19, "bold")).pack(anchor="w")
+        tk.Label(title_group, text="Browse your collection, line up a song, and make it yours.",
+                 bg=colors["bg"], fg=colors["muted"], font=("Arial", 9)).pack(anchor="w", pady=(4, 0))
+
+        search = tk.Frame(header, bg=colors["panel"], padx=10, pady=7,
+                          highlightthickness=1, highlightbackground=colors["line"])
+        search.grid(row=0, column=1, sticky="e", padx=(12, 8))
+        tk.Label(search, text="⌕", bg=colors["panel"], fg=colors["purple"],
+                 font=("Arial", 14, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        search_entry = tk.Entry(
+            search,
+            textvariable=self.ktv_search_var,
+            bg=colors["panel"],
+            fg=colors["text"],
+            insertbackground=colors["text"],
+            relief="flat",
+            width=29,
+            font=("Arial", 9),
+        )
+        search_entry.pack(side=tk.LEFT)
+        search_entry.bind("<KeyRelease>", lambda _event: self._render_ktv_library())
+        tk.Button(
+            header,
+            text="＋  Import / download",
+            command=lambda: self.switch_tab(1),
+            bg=colors["purple"],
+            fg="white",
+            activebackground="#8658E8",
+            activeforeground="white",
+            relief="flat",
+            padx=11,
+            pady=8,
+            cursor="hand2",
+            font=("Arial", 9, "bold"),
+        ).grid(row=0, column=2, sticky="e")
+
+        hero = tk.Frame(parent, bg="#2A1B4B", padx=22, pady=18,
+                        highlightthickness=1, highlightbackground="#48316C")
+        hero.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 12))
+        hero.columnconfigure(0, weight=1)
+        tk.Label(hero, text="YOUR STAGE, YOUR SONGS", bg="#2A1B4B", fg=colors["mint"],
+                 font=("Arial", 8, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(hero, text="Karaoke night starts here", bg="#2A1B4B", fg=colors["text"],
+                 font=("Arial", 21, "bold")).grid(row=1, column=0, sticky="w", pady=(5, 2))
+        tk.Label(hero, text="Pick a favorite from your library or bring in a new track.",
+                 bg="#2A1B4B", fg=colors["muted"], font=("Arial", 9)).grid(row=2, column=0, sticky="w")
+        hero_actions = tk.Frame(hero, bg="#2A1B4B")
+        hero_actions.grid(row=3, column=0, sticky="w", pady=(12, 0))
+        tk.Button(
+            hero_actions,
+            text="Browse my songs  →",
+            command=lambda: self.switch_tab(11),
+            bg=colors["pink"],
+            fg="#24112D",
+            activebackground="#FF83AE",
+            activeforeground="#24112D",
+            relief="flat",
+            padx=12,
+            pady=7,
+            cursor="hand2",
+            font=("Arial", 9, "bold"),
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            hero_actions,
+            text="Organize library",
+            command=lambda: self.switch_tab(10),
+            bg="#3A2A5B",
+            fg=colors["text"],
+            activebackground="#50377D",
+            activeforeground=colors["text"],
+            relief="flat",
+            padx=12,
+            pady=7,
+            cursor="hand2",
+            font=("Arial", 9, "bold"),
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        stage = tk.Frame(hero, bg="#3B2A61", width=170, height=104)
+        stage.grid(row=0, column=1, rowspan=4, sticky="e", padx=(20, 0))
+        stage.grid_propagate(False)
+        tk.Label(stage, text="♫", bg="#3B2A61", fg=colors["pink"],
+                 font=("Arial", 34, "bold")).pack(expand=True, pady=(6, 0))
+        tk.Label(stage, text="LOCAL LIBRARY · READY TO PLAY", bg="#3B2A61", fg=colors["text"],
+                 font=("Arial", 7, "bold")).pack(pady=(0, 10))
+
+        shortcuts = tk.Frame(parent, bg=colors["bg"])
+        shortcuts.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 12))
+        for column in range(3):
+            shortcuts.columnconfigure(column, weight=1)
+        shortcut_specs = [
+            ("♫", "Browse songs", "Search your local collection", self._open_discover_library, colors["purple"]),
+            ("▤", "Make a KTV", "Create subtitles and a video", lambda: self.switch_tab(2), colors["pink"]),
+            ("⚙", "Tune your setup", "Repair tools and preferences", lambda: self.switch_tab(6), colors["mint"]),
+        ]
+        for column, (icon, title, detail, command, accent) in enumerate(shortcut_specs):
+            card = tk.Frame(shortcuts, bg=colors["panel"], padx=12, pady=9,
+                            highlightthickness=1, highlightbackground=colors["line"], cursor="hand2")
+            card.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 5, 5 if column < 2 else 0))
+            card.columnconfigure(1, weight=1)
+            tk.Label(card, text=icon, bg=accent, fg="#24112D", width=3, height=1,
+                     font=("Arial", 12, "bold")).grid(row=0, column=0, rowspan=2, sticky="nsw", padx=(0, 9))
+            tk.Label(card, text=title, bg=colors["panel"], fg=colors["text"],
+                     font=("Arial", 9, "bold")).grid(row=0, column=1, sticky="sw")
+            tk.Label(card, text=detail, bg=colors["panel"], fg=colors["muted"],
+                     font=("Arial", 8)).grid(row=1, column=1, sticky="nw", pady=(2, 0))
+            card.bind("<Button-1>", lambda _event, callback=command: callback())
+            for child in card.winfo_children():
+                child.bind("<Button-1>", lambda _event, callback=command: callback())
+
+        lower = tk.Frame(parent, bg=colors["bg"])
+        lower.grid(row=3, column=0, sticky="nsew", padx=20, pady=(0, 8))
+        lower.grid_columnconfigure(0, weight=3)
+        lower.grid_columnconfigure(1, weight=2)
+        lower.grid_rowconfigure(1, weight=1)
+
+        song_heading = tk.Frame(lower, bg=colors["bg"])
+        song_heading.grid(row=0, column=0, sticky="ew", pady=(0, 7), padx=(0, 8))
+        tk.Label(song_heading, text="Your local songs", bg=colors["bg"], fg=colors["text"],
+                 font=("Arial", 13, "bold")).pack(side=tk.LEFT)
+        tk.Label(song_heading, textvariable=self.ktv_library_count_var, bg=colors["bg"], fg=colors["muted"],
+                 font=("Arial", 8)).pack(side=tk.LEFT, padx=(8, 0))
+        tk.Button(song_heading, text="View all  →", command=lambda: self.switch_tab(11),
+                  bg=colors["bg"], fg=colors["mint"], activebackground=colors["bg"],
+                  activeforeground=colors["text"], relief="flat", cursor="hand2",
+                  font=("Arial", 8, "bold")).pack(side=tk.RIGHT)
+
+        song_panel = tk.Frame(lower, bg=colors["panel"],
+                              highlightthickness=1, highlightbackground=colors["line"])
+        song_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        song_panel.grid_rowconfigure(0, weight=1)
+        song_panel.grid_columnconfigure(0, weight=1)
+        self.discover_song_tree = ttk.Treeview(
+            song_panel, columns=("artist", "language"), show="tree headings",
+            selectmode="browse", style="Discover.Treeview",
+        )
+        for column, heading in [("#0", "SONG"), ("artist", "ARTIST"), ("language", "LANGUAGE")]:
+            self.discover_song_tree.heading(column, text=heading)
+        for column, width, minimum, stretch in [
+            ("#0", 190, 110, True), ("artist", 120, 70, True), ("language", 82, 60, False)
+        ]:
+            self.discover_song_tree.column(column, width=width, minwidth=minimum, stretch=stretch)
+        song_scroll = ttk.Scrollbar(song_panel, orient=tk.VERTICAL, command=self.discover_song_tree.yview)
+        self.discover_song_tree.configure(yscrollcommand=song_scroll.set)
+        self.discover_song_tree.grid(row=0, column=0, sticky="nsew")
+        song_scroll.grid(row=0, column=1, sticky="ns")
+        self.discover_song_tree.bind("<<TreeviewSelect>>", self._on_discover_song_selected)
+        self.discover_song_tree.bind("<Double-1>", lambda _event: self._add_discover_song_to_queue(play=True))
+
+        queue_panel = tk.Frame(lower, bg=colors["panel"], padx=12, pady=10,
+                               highlightthickness=1, highlightbackground=colors["line"])
+        queue_panel.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        queue_panel.grid_rowconfigure(2, weight=1)
+        queue_heading = tk.Frame(queue_panel, bg=colors["panel"])
+        queue_heading.grid(row=0, column=0, sticky="ew")
+        tk.Label(queue_heading, text="Up next", bg=colors["panel"], fg=colors["text"],
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT)
+        tk.Label(queue_heading, textvariable=self.ktv_queue_count_var, bg=colors["panel"], fg=colors["muted"],
+                 font=("Arial", 8)).pack(side=tk.RIGHT)
+        tk.Label(queue_panel, text="Songs you add are queued on this device.", bg=colors["panel"],
+                 fg=colors["muted"], font=("Arial", 8)).grid(row=1, column=0, sticky="w", pady=(3, 7))
+        self.discover_queue_listbox = tk.Listbox(
+            queue_panel, height=5, activestyle="none", relief="flat", bd=0, highlightthickness=0,
+            bg="#120D25", fg=colors["text"], selectbackground="#50377D",
+            selectforeground=colors["text"], font=("Arial", 8),
+        )
+        self.discover_queue_listbox.grid(row=2, column=0, sticky="nsew")
+        queue_actions = tk.Frame(queue_panel, bg=colors["panel"])
+        queue_actions.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        tk.Button(queue_actions, text="Remove", command=self._remove_discover_queue_selection,
+                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=5,
+                  cursor="hand2", font=("Arial", 8)).pack(side=tk.LEFT)
+        tk.Button(queue_actions, text="Clear", command=self._clear_ktv_queue,
+                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=5,
+                  cursor="hand2", font=("Arial", 8)).pack(side=tk.LEFT, padx=(5, 0))
+        tk.Button(queue_actions, text="Play queue", command=self._play_ktv_queue,
+                  bg=colors["purple"], fg="white", activebackground="#8658E8",
+                  activeforeground="white", relief="flat", padx=10, pady=5,
+                  cursor="hand2", font=("Arial", 8, "bold")).pack(side=tk.RIGHT)
+
+        player = tk.Frame(parent, bg="#19132F", padx=14, pady=7,
+                          highlightthickness=1, highlightbackground=colors["line"])
+        player.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 10))
+        tk.Label(player, text="♫", bg="#342654", fg=colors["pink"], width=3,
+                 font=("Arial", 13, "bold")).pack(side=tk.LEFT, padx=(0, 10))
+        player_copy = tk.Frame(player, bg="#19132F")
+        player_copy.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(player_copy, textvariable=self.ktv_now_playing_var, bg="#19132F", fg=colors["text"],
+                 font=("Arial", 9, "bold"), anchor="w").pack(anchor="w")
+        tk.Label(player_copy, textvariable=self.ktv_artist_var, bg="#19132F", fg=colors["muted"],
+                 font=("Arial", 8), anchor="w").pack(anchor="w", pady=(2, 0))
+        transport = tk.Frame(player, bg="#19132F")
+        transport.pack(side=tk.LEFT, padx=12)
+        for label, callback in [
+            ("|◀", self._play_previous_ktv_track),
+            ("▶", self._play_ktv_selected_song),
+            ("▶|", self._play_next_ktv_queue_track),
+            ("■", self._stop_ktv_playback),
+        ]:
+            tk.Button(transport, text=label, command=callback, bg="#2A2141", fg=colors["text"],
+                      activebackground="#50377D", activeforeground=colors["text"],
+                      relief="flat", width=4, pady=5, cursor="hand2",
+                      font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Label(player, text="LOCAL PLAYBACK", bg="#19132F", fg=colors["mint"],
+                 font=("Arial", 7, "bold")).pack(side=tk.RIGHT, padx=(10, 0))
+
+        self._render_discover_songs()
+        self._render_ktv_queue()
+
+    def _open_discover_library(self):
+        self.switch_tab(11)
+
+    def _render_discover_songs(self):
+        if not hasattr(self, "discover_song_tree"):
+            return
+        for item in self.discover_song_tree.get_children():
+            self.discover_song_tree.delete(item)
+        if not hasattr(self, "ktv_song_tree"):
+            return
+
+        visible = 0
+        for song in self._song_manager_records:
+            song_id = str(song["id"])
+            if not self.ktv_song_tree.exists(song_id):
+                continue
+            path = Path(song["path"])
+            self.discover_song_tree.insert(
+                "", tk.END, iid=song_id,
+                text=song.get("title") or path.stem,
+                values=(song.get("artist") or "Unknown Artist", song.get("language") or "Other"),
+                tags=("missing",) if not path.is_file() else (),
+            )
+            visible += 1
+            if visible >= 5:
+                break
+
+        if not visible:
+            self.discover_song_tree.insert(
+                "", tk.END, iid="discover-empty",
+                text="No songs found — scan your library or import media",
+                values=("", ""),
+            )
+            self.discover_song_tree.tag_configure("empty", foreground=self.discover_colors["muted"])
+            self.discover_song_tree.item("discover-empty", tags=("empty",))
+        self.discover_song_tree.tag_configure("missing", foreground=self.discover_colors["muted"])
+
+    def _on_discover_song_selected(self, _event=None):
+        if not hasattr(self, "discover_song_tree"):
+            return
+        selection = self.discover_song_tree.selection()
+        if not selection or selection[0] == "discover-empty":
+            return
+        song_id = selection[0]
+        if self.ktv_song_tree.exists(song_id):
+            self.ktv_song_tree.selection_set(song_id)
+            self.ktv_song_tree.focus(song_id)
+            self._on_ktv_song_selected()
+
+    def _add_discover_song_to_queue(self, play=False):
+        selection = self.discover_song_tree.selection()
+        if not selection or selection[0] == "discover-empty":
+            return
+        song_id = selection[0]
+        if not self.ktv_song_tree.exists(song_id):
+            return
+        self.ktv_song_tree.selection_set(song_id)
+        self.ktv_song_tree.focus(song_id)
+        self._on_ktv_song_selected()
+        self._add_ktv_selection_to_queue(auto_play=play)
+
+    def _remove_discover_queue_selection(self):
+        if not hasattr(self, "discover_queue_listbox"):
+            return
+        indices = self.discover_queue_listbox.curselection()
+        if not indices:
+            return
+        for index in reversed(indices):
+            self.ktv_queue.pop(index)
+        self._render_ktv_queue()
+
     # =========================================================================
     # ARTWORK & VIDEO CANVAS DRAWING CAPABILITIES
     # =========================================================================
@@ -630,6 +955,7 @@ class KtvSelectionMixin:
         shown = len(self.ktv_song_tree.get_children())
         self.ktv_library_count_var.set(f"{len(self._song_manager_records)} 首")
         self.ktv_selection_status_var.set(f"曲库共 {len(self._song_manager_records)} 首 · 搜寻结果 {shown} 首 · 双击点歌")
+        self._render_discover_songs()
 
     def _on_ktv_song_selected(self, _event=None):
         selection = self.ktv_song_tree.selection()
@@ -685,6 +1011,13 @@ class KtvSelectionMixin:
             prefix = "▶ " if (self.ktv_queue_playing and self.ktv_current_song and self.ktv_current_song.get("id") == song.get("id")) else f"{idx:02d}. "
             self.ktv_queue_listbox.insert(tk.END, f"{prefix}{title}  -  {artist}")
         self.ktv_queue_count_var.set(f"{len(self.ktv_queue)} 首歌曲")
+        if hasattr(self, "discover_queue_listbox"):
+            self.discover_queue_listbox.delete(0, tk.END)
+            for idx, song in enumerate(self.ktv_queue, start=1):
+                title = song.get("title") or Path(song["path"]).stem
+                artist = song.get("artist") or "Unknown Artist"
+                prefix = "▶ " if (self.ktv_queue_playing and self.ktv_current_song and self.ktv_current_song.get("id") == song.get("id")) else f"{idx:02d}. "
+                self.discover_queue_listbox.insert(tk.END, f"{prefix} {title}  —  {artist}")
 
     def _remove_ktv_queue_selection(self):
         indices = self.ktv_queue_listbox.curselection()
@@ -862,4 +1195,3 @@ class KtvSelectionMixin:
             self.ktv_visualizer_bars = [6] * 24
             self._draw_video_canvas_screen(self.ktv_current_song)
             self._render_ktv_queue()
-

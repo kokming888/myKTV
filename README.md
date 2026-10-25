@@ -35,6 +35,7 @@ MyKTV was started from the code base of YT2MKV, originally developed by David Ch
 - Force 1080p output with black-bar padding for consistent video framing
 
 ### Local media workflow
+- Discover home with quick library search, one-click actions, and a persistent local playback queue
 - Add local videos or folders
 - Batch process multiple files
 - Extract audio from video files

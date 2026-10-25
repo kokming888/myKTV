@@ -405,19 +405,26 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
         return lb, bf
 
     def setup_ui(self):
-        tk.Label(self.root, text=f"MP3 人声分离 & YouTube 下载/KTV 制作工具 {self.version}", font=("Arial", 13, "bold"), fg=self.ui_colors['primary'], bg=self._bg).pack(pady=(3, 2))
-
         main_split = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=self._bg)
         main_split.pack(fill=tk.BOTH, expand=True, padx=5, pady=2)
 
-        left_panel = tk.Frame(main_split, bg=self._bg, width=200)
+        nav_bg = "#100B23"
+        self.nav_bg = nav_bg
+        left_panel = tk.Frame(main_split, bg=nav_bg, width=220)
         left_panel.pack_propagate(False)
-        main_split.add(left_panel, minsize=180)
+        main_split.add(left_panel, minsize=200)
 
-        tk.Label(left_panel, text="功能选单", font=("Arial", 12, "bold"), fg=self.ui_colors['primary'], bg=self._bg).pack(pady=(3, 5))
+        brand = tk.Frame(left_panel, bg=nav_bg)
+        brand.pack(fill=tk.X, padx=16, pady=(18, 22))
+        tk.Label(brand, text="♫", font=("Arial", 20, "bold"), fg="#FF6B9F", bg=nav_bg).pack(side=tk.LEFT, padx=(0, 9))
+        brand_copy = tk.Frame(brand, bg=nav_bg)
+        brand_copy.pack(side=tk.LEFT)
+        tk.Label(brand_copy, text="MyKTV", font=("Arial", 15, "bold"), fg="#F8F6FF", bg=nav_bg).pack(anchor=tk.W)
+        tk.Label(brand_copy, text="LOCAL KARAOKE STUDIO", font=("Arial", 7, "bold"), fg="#A9A2C0", bg=nav_bg).pack(anchor=tk.W, pady=(2, 0))
 
-        self.tab_buttons = []
+        self.tab_buttons = {}
         self.current_tab_index = 0
+        self.nav_active = "#6941C6"
 
         tab_info = [
             ("📺", "YouTube 一键转 KTV"),
@@ -431,7 +438,8 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
             ("⚙️", "Whisper 辨识设定"),
             ("📧", "联络作者"),
             ("🎼", "歌曲管理 / Song Library"),
-            ("🎤", "KTV 选歌 / Song Selection")
+            ("🎤", "KTV 选歌 / Song Selection"),
+            ("✦", "Discover")
         ]
 
         self.right_scrollable_frame = tk.Frame(main_split, bg=self._bg)
@@ -447,35 +455,41 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
 
         self.content_frames = []
 
-        for i, (icon, name) in enumerate(tab_info):
+        for i in [12, *range(12)]:
+            icon, name = tab_info[i]
+            if i == 12:
+                tk.Label(left_panel, text="YOUR MUSIC", bg=nav_bg, fg="#A9A2C0",
+                         font=("Arial", 8, "bold")).pack(anchor=tk.W, padx=18, pady=(0, 6))
             if i == 2:
-                tk.Frame(left_panel, bg=self.ui_colors['border'], height=2).pack(fill=tk.X, padx=10, pady=3)
-                tk.Label(left_panel, text="【 本地功能 】", bg=self._bg, fg=self._fg, font=("Arial", 9, "bold")).pack(anchor=tk.W, padx=15, pady=(3, 1))
+                tk.Frame(left_panel, bg="#31284F", height=1).pack(fill=tk.X, padx=15, pady=8)
+                tk.Label(left_panel, text="CREATE & PROCESS", bg=nav_bg, fg="#A9A2C0",
+                         font=("Arial", 8, "bold")).pack(anchor=tk.W, padx=18, pady=(3, 5))
 
             btn = tk.Button(left_panel,
-                          text=f"{icon} {name}",
-                          font=("Arial", 10),
-                          bg=self._bg,
-                          fg=self._fg,
+                          text=f"{icon}  {name}",
+                          font=("Arial", 9, "bold" if i == 12 else "normal"),
+                          bg="#35245B" if i == 12 else nav_bg,
+                          fg="#FFFFFF" if i == 12 else "#D2CDE0",
                           relief='flat',
-                          padx=15,
-                          pady=6,
+                          padx=12,
+                          pady=8,
                           anchor='w',
                           cursor='hand2',
                           command=lambda idx=i: self.switch_tab(idx))
-            btn.pack(fill=tk.X, padx=5, pady=1)
-            self.tab_buttons.append(btn)
+            btn.pack(fill=tk.X, padx=9, pady=2)
+            self.tab_buttons[i] = btn
 
+        for _ in tab_info:
             content_frame = tk.Frame(self.tab_container, bg=self._bg)
             self.content_frames.append(content_frame)
 
         for i, frame in enumerate(self.content_frames):
-            sticky = "nsew" if i in (7, 10, 11) else "new"
+            sticky = "nsew" if i in (7, 10, 11, 12) else "new"
             frame.grid(row=0, column=0, sticky=sticky, padx=3, pady=2)
-            if i != 0:
+            if i != 12:
                 frame.grid_remove()
 
-        self.update_tab_buttons(0)
+        self.update_tab_buttons(12)
 
         yt_tab = self.content_frames[0]
 
@@ -1119,6 +1133,8 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
         self.show_welcome_message()
         self.build_song_manager_tab(self.content_frames[10])
         self.build_ktv_selection_tab(self.content_frames[11])
+        self.build_discover_tab(self.content_frames[12])
+        self.switch_tab(12)
         self.root.protocol("WM_DELETE_WINDOW", self._close_app_window)
 
     def _close_app_window(self):
@@ -1345,11 +1361,11 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
         if self.current_tab_index == index: return
         self.content_frames[self.current_tab_index].grid_remove()
         self.current_tab_index = index
-        fill_content = index in (7, 10, 11)
+        fill_content = index in (7, 10, 11, 12)
         self.right_main_container.pack_configure(fill=tk.BOTH if fill_content else tk.X, expand=fill_content)
         self.tab_container.pack_configure(fill=tk.BOTH if fill_content else tk.X, expand=fill_content)
         self.content_frames[index].grid(row=0, column=0, sticky="nsew" if fill_content else "new", padx=3, pady=2)
-        if index in (10, 11):
+        if index in (10, 11, 12):
             self.btn_frame.pack_forget()
             self.status_frame.pack_forget()
             self.progress_header.pack_forget()
@@ -1366,15 +1382,15 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
 
     def update_tab_buttons(self, active_index):
         """更新按钮的视觉样式"""
-        for i, btn in enumerate(self.tab_buttons):
+        for i, btn in self.tab_buttons.items():
             is_active = (i == active_index)
-            btn.configure(bg=self.ui_colors['primary'] if is_active else self._bg,
-                          fg='white' if is_active else self._fg,
+            btn.configure(bg=self.nav_active if is_active else self.nav_bg,
+                          fg='white' if is_active else '#D2CDE0',
                           relief='sunken' if is_active else 'flat')
 
     def _on_tab_changed_logic(self, current_tab):
         """原来的 on_tab_changed 逻辑，用于处理核心设定显示/隐藏等"""
-        if current_tab in (5, 6, 7, 8, 9, 10, 11):
+        if current_tab in (5, 6, 7, 8, 9, 10, 11, 12):
             self.settings_frame.pack_forget()
         else:
             self.settings_frame.pack(fill=tk.X, pady=(0, 3))
