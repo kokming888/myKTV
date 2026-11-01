@@ -19,6 +19,7 @@ import tempfile
 from contextlib import suppress
 from myktv_song_manager import APP_VERSION, SongManagerViewMixin
 from myktv_ktv_selection import KtvSelectionMixin
+from myktv_ui_tokens import MAIN_THEME
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
@@ -40,7 +41,8 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
         self.version = APP_VERSION
         self.root.title(f"MyKTV {self.version} | YouTube KTV 歌曲与字幕制作")
         self.root.geometry("1350x800")
-        self.root.minsize(1050, 650)  # 設定最小尺寸 - 调整以适应霓虹设计
+        # Keep enough room for the navigation rail and nested song/player panes.
+        self.root.minsize(1300, 760)
 
         if getattr(sys, 'frozen', False):
             exe_path = Path(sys.executable)
@@ -360,11 +362,7 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
         available_themes = style.theme_names()
         style.theme_use(next((t for t in ['clam', 'alt', 'default', 'classic'] if t in available_themes), 'default'))
 
-        colors = {
-            'primary': '#2563EB', 'success': '#10B981', 'warning': '#F59E0B',
-            'danger': '#EF4444',  'info': '#6366F1',   'bg': '#F8FAFC',
-            'fg': '#1E293B',      'border': '#E2E8F0',  'hover': '#DBEAFE',
-        }
+        colors = dict(MAIN_THEME)
         self.root.configure(bg=colors['bg'])
         style.configure('TFrame', background=colors['bg'])
         style.configure('TLabel', background=colors['bg'], foreground=colors['fg'], font=('Arial', 9))
@@ -442,8 +440,39 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
             ("✦", "Discover")
         ]
 
-        self.right_scrollable_frame = tk.Frame(main_split, bg=self._bg)
-        main_split.add(self.right_scrollable_frame, minsize=600)
+        self.right_scroll_host = tk.Frame(main_split, bg=self._bg)
+        main_split.add(self.right_scroll_host, minsize=1040)
+        self.right_scroll_canvas = tk.Canvas(
+            self.right_scroll_host, bg=self._bg, highlightthickness=0)
+        self.right_scrollbar = ttk.Scrollbar(
+            self.right_scroll_host, orient=tk.VERTICAL,
+            command=self.right_scroll_canvas.yview)
+        self.right_scroll_canvas.configure(yscrollcommand=self.right_scrollbar.set)
+        self.right_scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.right_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.right_scrollable_frame = tk.Frame(self.right_scroll_canvas, bg=self._bg)
+        self._right_scroll_window = self.right_scroll_canvas.create_window(
+            (0, 0), window=self.right_scrollable_frame, anchor="nw")
+        self.right_scrollable_frame.bind(
+            "<Configure>",
+            lambda _event: self.right_scroll_canvas.configure(
+                scrollregion=self.right_scroll_canvas.bbox("all")))
+        self.right_scroll_canvas.bind(
+            "<Configure>",
+            lambda event: self.right_scroll_canvas.itemconfigure(
+                self._right_scroll_window, width=event.width))
+
+        def _scroll_main_content(event):
+            # Whisper settings already own a nested canvas and mouse-wheel binding.
+            if self.current_tab_index == 8:
+                return None
+            self.right_scroll_canvas.yview_scroll(int(-event.delta / 120), "units")
+            return "break"
+
+        # Bind before Whisper's existing bind_all handler; returning None for tab 8
+        # leaves that screen's original canvas scroll behavior untouched.
+        self.root.bind_all("<MouseWheel>", _scroll_main_content, add="+")
 
         self.right_main_container = tk.Frame(self.right_scrollable_frame, bg=self._bg)
         self.right_main_container.pack(fill=tk.X, padx=5, pady=3)
@@ -455,15 +484,22 @@ class MyKTVApp(SongManagerViewMixin, KtvSelectionMixin):
 
         self.content_frames = []
 
-        for i in [12, *range(12)]:
+        navigation_groups = {
+            12: "DISCOVER & PLAY",
+            0: "CREATE & PROCESS",
+            6: "SETTINGS & STATUS",
+            9: "SUPPORT",
+        }
+        navigation_order = [12, 11, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        for i in navigation_order:
             icon, name = tab_info[i]
-            if i == 12:
-                tk.Label(left_panel, text="YOUR MUSIC", bg=nav_bg, fg="#A9A2C0",
-                         font=("Arial", 8, "bold")).pack(anchor=tk.W, padx=18, pady=(0, 6))
-            if i == 2:
-                tk.Frame(left_panel, bg="#31284F", height=1).pack(fill=tk.X, padx=15, pady=8)
-                tk.Label(left_panel, text="CREATE & PROCESS", bg=nav_bg, fg="#A9A2C0",
-                         font=("Arial", 8, "bold")).pack(anchor=tk.W, padx=18, pady=(3, 5))
+            if i in navigation_groups:
+                if i != 12:
+                    tk.Frame(left_panel, bg="#31284F", height=1).pack(
+                        fill=tk.X, padx=15, pady=(8, 5))
+                tk.Label(left_panel, text=navigation_groups[i], bg=nav_bg, fg="#A9A2C0",
+                         font=("Arial", 8, "bold")).pack(
+                             anchor=tk.W, padx=18, pady=(3, 5))
 
             btn = tk.Button(left_panel,
                           text=f"{icon}  {name}",

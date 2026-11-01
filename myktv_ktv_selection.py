@@ -7,36 +7,23 @@ from tkinter import messagebox, ttk
 
 import hashlib
 import os
+import queue
 import random
 import subprocess
-import time
+import threading
 import tkinter as tk
 from contextlib import suppress
 from pathlib import Path
 from tkinter import messagebox, ttk
 from PIL import Image, ImageDraw, ImageFilter, ImageTk
+from myktv_ui_tokens import DISCOVER_THEME, KTV_THEME
 
 
 class KtvSelectionMixin:
     """Build the professional KTV song-selection and multimedia playback station."""
 
     def build_ktv_selection_tab(self, parent):
-        colors = {
-            "bg": "#0a0015",
-            "surface": "#140026",
-            "surface_alt": "#220040",
-            "input": "#0c0019",
-            "line": "#4a0072",
-            "text": "#ffffff",
-            "muted": "#aa99cc",
-            "gold": "#ffd700",
-            "mint": "#00ffff",
-            "coral": "#ff007f",
-            "selected": "#7928ca",
-            "missing": "#a370f7",
-            "accent": "#00f0ff",
-            "success": "#00ff88",
-        }
+        colors = dict(KTV_THEME)
         self.ktv_colors = colors
         self.ktv_parent = parent
         parent.configure(bg=colors["bg"])
@@ -55,8 +42,8 @@ class KtvSelectionMixin:
         self.ktv_playback_status_var = tk.StringVar(value="请从曲库点歌并加入播放伫列。")
         self.ktv_selection_status_var = tk.StringVar(value="双击歌曲即可点播或加入伫列")
         self.ktv_library_count_var = tk.StringVar(value="0 首")
-        self.ktv_duration_var = tk.StringVar(value="00:00 / 00:00")
-        self.ktv_track_mode_var = tk.StringVar(value="🎤 原唱/伴奏: 声道1")
+        self.ktv_duration_var = tk.StringVar(value="实际播放进度不可读取")
+        self.ktv_track_mode_var = tk.StringVar(value="音轨切换：未支持")
         self.ktv_popup_video_var = tk.BooleanVar(value=False)
         self.ktv_queue_count_var = tk.StringVar(value="0 首歌曲")
 
@@ -67,23 +54,36 @@ class KtvSelectionMixin:
         self.ktv_preview_process = None
         self.ktv_selected_song_id = None
         self.ktv_current_song = None
-        self.ktv_playback_start_time = 0
-        self.ktv_estimated_duration = 240
         self.ktv_audio_channel_index = 0
         self.ktv_visualizer_bars = [10] * 24
         self.ktv_artwork_photo = None
         self.ktv_video_bg_photo = None
         self._visualizer_timer_id = None
+        self._artwork_request_id = 0
+        self._artwork_song_key = None
+        self._artwork_source_image = None
+        self._artwork_request_queue = queue.Queue(maxsize=1)
+        self._artwork_result_queue = queue.Queue()
+        self._artwork_worker_thread = threading.Thread(
+            target=self._ktv_artwork_worker, daemon=True)
+        self._artwork_worker_thread.start()
+        self._artwork_poll_id = self.root.after(100, self._drain_ktv_artwork_results)
 
         languages = ["全部语言", "Mandarin", "Cantonese", "Hokkien", "Malay", "English", "Japanese", "Korean", "Other"]
 
         # Treeview Styles
         style = ttk.Style(parent)
         style.configure("KTV.Treeview", background=colors["input"], foreground=colors["text"],
-                        fieldbackground=colors["input"], rowheight=34, borderwidth=0, font=("Arial", 9))
+                        fieldbackground=colors["input"], rowheight=44, borderwidth=0, font=("Arial", 9))
         style.configure("KTV.Treeview.Heading", background=colors["surface_alt"], foreground=colors["mint"],
                         relief="flat", borderwidth=0, font=("Arial", 9, "bold"), padding=(6, 8))
         style.map("KTV.Treeview", background=[("selected", colors["selected"])],
+                  foreground=[("selected", colors["text"])])
+        style.configure("KTV.Queue.Treeview", background=colors["input"],
+                        foreground=colors["text"], fieldbackground=colors["input"],
+                        rowheight=44, borderwidth=0, font=("Arial", 9))
+        style.map("KTV.Queue.Treeview",
+                  background=[("selected", colors["selected"])],
                   foreground=[("selected", colors["text"])])
 
         parent.grid_rowconfigure(1, weight=1)
@@ -122,8 +122,9 @@ class KtvSelectionMixin:
 
         tk.Button(header_right, text="↻ 重新整理", command=self._refresh_ktv_library,
                   bg=colors["surface_alt"], fg=colors["text"], activebackground=colors["selected"],
-                  activeforeground=colors["text"], relief="flat", padx=10, pady=5, cursor="hand2",
-                  font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 10))
+                  activeforeground=colors["text"], relief="flat", padx=10, pady=15, cursor="hand2",
+                  takefocus=True, highlightthickness=2, highlightbackground=colors["surface"],
+                  highlightcolor=colors["mint"], font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 10))
 
         library_badge = tk.Frame(header_right, bg=colors["selected"], padx=10, pady=4)
         library_badge.pack(side=tk.LEFT)
@@ -144,7 +145,7 @@ class KtvSelectionMixin:
                                     highlightthickness=1, highlightbackground=colors["gold"])
 
         main_split.add(left_player_panel, minsize=540, stretch="always")
-        main_split.add(right_song_panel, minsize=520, stretch="always")
+        main_split.add(right_song_panel, minsize=440, stretch="always")
 
         # ====================================================================
         # LEFT PANEL CONTENTS: 1. Video Canvas, 2. Artwork & Metadata, 3. Controls
@@ -187,24 +188,28 @@ class KtvSelectionMixin:
 
         time_row = tk.Frame(meta_info, bg=colors["surface_alt"])
         time_row.pack(fill=tk.X, pady=(2, 0))
-        tk.Label(time_row, text="⏱ 播放时间: ", bg=colors["surface_alt"], fg=colors["muted"],
+        tk.Label(time_row, text="⏱ 播放进度: ", bg=colors["surface_alt"], fg=colors["muted"],
                  font=("Arial", 8)).pack(side=tk.LEFT)
         tk.Label(time_row, textvariable=self.ktv_duration_var, bg=colors["surface_alt"],
                  fg=colors["gold"], font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 12))
 
-        track_btn = tk.Button(time_row, textvariable=self.ktv_track_mode_var, command=self._switch_ktv_audio_track,
-                              bg=colors["input"], fg=colors["mint"], activebackground=colors["selected"],
-                              activeforeground=colors["text"], relief="flat", padx=6, pady=2, cursor="hand2",
-                              font=("Arial", 8, "bold"))
+        track_btn = tk.Button(time_row, textvariable=self.ktv_track_mode_var,
+                              state=tk.DISABLED, disabledforeground=colors["muted"],
+                              bg=colors["input"], fg=colors["muted"], relief="flat",
+                              padx=6, pady=2, font=("Arial", 8, "bold"))
         track_btn.pack(side=tk.LEFT)
 
         # 3. Transport Controls Bar
         control_bar = tk.Frame(left_player_panel, bg=colors["surface"], padx=4, pady=4)
         control_bar.pack(fill=tk.X)
 
-        btn_style = {"relief": "flat", "cursor": "hand2", "font": ("Arial", 9, "bold"), "pady": 7}
+        btn_style = {
+            "relief": "flat", "cursor": "hand2", "font": ("Arial", 9, "bold"),
+            "pady": 15, "takefocus": True, "highlightthickness": 2,
+            "highlightbackground": colors["surface"], "highlightcolor": colors["mint"],
+        }
 
-        tk.Button(control_bar, text="⏮ 上一首", command=self._play_previous_ktv_track,
+        tk.Button(control_bar, text="⏮ 播放上一首", command=self._play_previous_ktv_track,
                   bg=colors["surface_alt"], fg=colors["text"], activebackground=colors["selected"],
                   activeforeground=colors["text"], **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
@@ -212,22 +217,24 @@ class KtvSelectionMixin:
                   bg=colors["coral"], fg="white", activebackground="#ff3399",
                   activeforeground="white", **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
-        tk.Button(control_bar, text="🔁 重唱", command=self._replay_current_ktv_track,
+        tk.Button(control_bar, text="🔁 重唱当前歌曲", command=self._replay_current_ktv_track,
                   bg=colors["surface_alt"], fg=colors["gold"], activebackground=colors["selected"],
                   activeforeground=colors["gold"], **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
-        tk.Button(control_bar, text="⏭ 下一首", command=self._play_next_ktv_queue_track,
+        tk.Button(control_bar, text="⏭ 播放下一首", command=self._play_next_ktv_queue_track,
                   bg=colors["surface_alt"], fg=colors["text"], activebackground=colors["selected"],
                   activeforeground=colors["text"], **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
-        tk.Button(control_bar, text="⏹ 停止", command=self._stop_ktv_playback,
+        tk.Button(control_bar, text="⏹ 停止播放", command=self._stop_ktv_playback,
                   bg="#3d0014", fg="#ff4d4d", activebackground="#660022",
                   activeforeground="white", **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         popup_check = tk.Checkbutton(control_bar, text="📺 弹出独立视窗", variable=self.ktv_popup_video_var,
                                      bg=colors["surface"], fg=colors["mint"], selectcolor=colors["input"],
                                      activebackground=colors["surface"], activeforeground=colors["mint"],
-                                     font=("Arial", 8))
+                                     font=("Arial", 9), pady=8, takefocus=True,
+                                     highlightthickness=2, highlightbackground=colors["surface"],
+                                     highlightcolor=colors["mint"])
         popup_check.pack(side=tk.LEFT, padx=(8, 2))
 
         # ====================================================================
@@ -240,33 +247,38 @@ class KtvSelectionMixin:
 
         self.ktv_language_buttons = {}
         self.ktv_language_count_vars = {}
-        for language in languages:
+        for column in range(3):
+            lang_bar.grid_columnconfigure(column, weight=1)
+        for language_index, language in enumerate(languages):
             count_var = tk.StringVar(value="0")
             self.ktv_language_count_vars[language] = count_var
             label = "全部" if language == "全部语言" else language
-            button = tk.Button(lang_bar, text=label, relief="flat", padx=8, pady=4,
+            button = tk.Button(lang_bar, text=label, relief="flat", padx=4, pady=15,
                                bg=colors["selected"] if language == "全部语言" else colors["surface_alt"],
                                fg=colors["text"] if language == "全部语言" else colors["muted"],
                                activebackground=colors["selected"], activeforeground=colors["text"],
                                command=lambda value=language: self._set_ktv_language_filter(value),
-                               font=("Arial", 8, "bold"), cursor="hand2")
-            button.pack(side=tk.LEFT, padx=(0, 4))
+                               font=("Arial", 8, "bold"), cursor="hand2", takefocus=True,
+                               highlightthickness=2, highlightbackground=colors["surface"],
+                               highlightcolor=colors["mint"])
+            button.grid(row=language_index // 3, column=language_index % 3,
+                        sticky="ew", padx=2, pady=2)
             self.ktv_language_buttons[language] = button
 
         # Tag Quick Filters
         tag_bar = tk.Frame(right_song_panel, bg=colors["surface"])
         tag_bar.pack(fill=tk.X, pady=(0, 8))
         self.ktv_tag_buttons = {}
-        for tag in ["全部", "Pop", "Band", "Duet", "Concert", "Ballad"]:
-            value = "" if tag == "全部" else tag
-            btn = tk.Button(tag_bar, text=tag, relief="flat", padx=8, pady=3,
-                            bg=colors["selected"] if not value else colors["input"],
-                            fg=colors["text"] if not value else colors["muted"],
-                            activebackground=colors["selected"], activeforeground=colors["text"],
-                            command=lambda sel=value: self._set_ktv_tag_filter(sel),
-                            font=("Arial", 8), cursor="hand2")
-            btn.pack(side=tk.LEFT, padx=(0, 4))
-            self.ktv_tag_buttons[value] = btn
+        self._ktv_tag_filter_values = None
+        self.ktv_tag_shortcut_frame = tk.Frame(tag_bar, bg=colors["surface"])
+        self.ktv_tag_shortcut_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.ktv_tag_filter_combo = ttk.Combobox(
+            tag_bar, textvariable=self.ktv_tag_filter_var, values=[],
+            state="disabled", width=18)
+        self.ktv_tag_filter_combo.pack(side=tk.RIGHT, padx=2)
+        self.ktv_tag_filter_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._set_ktv_tag_filter(self.ktv_tag_filter_var.get()))
 
         # Song List Treeview (Split with Up Next Queue)
         right_split = tk.PanedWindow(right_song_panel, orient=tk.VERTICAL, sashwidth=5, bg=colors["bg"], bd=0)
@@ -312,24 +324,37 @@ class KtvSelectionMixin:
         # Queue Action buttons
         tk.Button(queue_header, text="🗑️ 清空", command=self._clear_ktv_queue,
                   bg=colors["surface"], fg=colors["muted"], activebackground=colors["surface_alt"],
-                  activeforeground=colors["text"], relief="flat", padx=6, pady=1, cursor="hand2",
-                  font=("Arial", 8)).pack(side=tk.RIGHT)
+                  activeforeground=colors["text"], relief="flat", padx=6, pady=15, cursor="hand2",
+                  takefocus=True, highlightthickness=2, highlightbackground=colors["surface"],
+                  highlightcolor=colors["mint"], font=("Arial", 8)).pack(side=tk.RIGHT)
         tk.Button(queue_header, text="✕ 移除", command=self._remove_ktv_queue_selection,
                   bg=colors["surface_alt"], fg=colors["coral"], activebackground=colors["selected"],
-                  activeforeground=colors["text"], relief="flat", padx=6, pady=1, cursor="hand2",
-                  font=("Arial", 8)).pack(side=tk.RIGHT, padx=4)
+                  activeforeground=colors["text"], relief="flat", padx=6, pady=15, cursor="hand2",
+                  takefocus=True, highlightthickness=2, highlightbackground=colors["surface"],
+                  highlightcolor=colors["mint"], font=("Arial", 8)).pack(side=tk.RIGHT, padx=4)
         tk.Button(queue_header, text="✚ 点歌", command=lambda: self._add_ktv_selection_to_queue(auto_play=False),
                   bg=colors["mint"], fg=colors["bg"], activebackground="#55ffff",
-                  activeforeground=colors["bg"], relief="flat", padx=8, pady=1, cursor="hand2",
-                  font=("Arial", 8, "bold")).pack(side=tk.RIGHT, padx=4)
+                  activeforeground=colors["bg"], relief="flat", padx=8, pady=15, cursor="hand2",
+                  takefocus=True, highlightthickness=2, highlightbackground=colors["surface"],
+                  highlightcolor=colors["text"], font=("Arial", 8, "bold")).pack(side=tk.RIGHT, padx=4)
 
-        self.ktv_queue_listbox = tk.Listbox(queue_list_frame, height=5, selectmode=tk.EXTENDED,
-                                            activestyle="none", relief="flat", bd=0, highlightthickness=0,
-                                            bg=colors["input"], fg=colors["text"],
-                                            selectbackground=colors["selected"], selectforeground=colors["text"],
-                                            font=("Arial", 9))
+        self.ktv_queue_focus_frame = tk.Frame(
+            queue_list_frame, bg=colors["input"], highlightthickness=2,
+            highlightbackground=colors["line"], highlightcolor=colors["mint"])
+        self.ktv_queue_focus_frame.pack(fill=tk.BOTH, expand=True)
+        self.ktv_queue_listbox = ttk.Treeview(
+            self.ktv_queue_focus_frame, show="tree", selectmode="extended",
+            style="KTV.Queue.Treeview", height=5, takefocus=True)
         self.ktv_queue_listbox.pack(fill=tk.BOTH, expand=True)
+        self.ktv_queue_listbox.bind(
+            "<FocusIn>", lambda _event: self.ktv_queue_focus_frame.configure(
+                highlightbackground=colors["mint"]))
+        self.ktv_queue_listbox.bind(
+            "<FocusOut>", lambda _event: self.ktv_queue_focus_frame.configure(
+                highlightbackground=colors["line"]))
         self.ktv_queue_listbox.bind("<Double-1>", lambda _e: self._play_queue_item_direct())
+        self.ktv_queue_listbox.bind("<Return>", lambda _e: self._play_queue_item_direct())
+        self.ktv_queue_listbox.bind("<Delete>", lambda _e: self._remove_ktv_queue_selection())
 
         # ----------------------------- FOOTER STATUS -----------------------------
         footer = tk.Frame(parent, bg=colors["surface"], padx=12, pady=6,
@@ -343,17 +368,7 @@ class KtvSelectionMixin:
         self._render_ktv_library()
 
     def build_discover_tab(self, parent):
-        colors = {
-            "bg": "#100B23",
-            "panel": "#19132F",
-            "panel_alt": "#241B40",
-            "line": "#352B50",
-            "text": "#F8F6FF",
-            "muted": "#A9A2C0",
-            "purple": "#9B6BFF",
-            "pink": "#FF6B9F",
-            "mint": "#80E9D2",
-        }
+        colors = dict(DISCOVER_THEME)
         self.discover_colors = colors
         parent.configure(bg=colors["bg"])
         parent.grid_columnconfigure(0, weight=1)
@@ -365,7 +380,7 @@ class KtvSelectionMixin:
             background=colors["panel"],
             foreground=colors["text"],
             fieldbackground=colors["panel"],
-            rowheight=32,
+            rowheight=44,
             borderwidth=0,
             font=("Arial", 9),
         )
@@ -548,24 +563,44 @@ class KtvSelectionMixin:
                  font=("Arial", 8)).pack(side=tk.RIGHT)
         tk.Label(queue_panel, text="Songs you add are queued on this device.", bg=colors["panel"],
                  fg=colors["muted"], font=("Arial", 8)).grid(row=1, column=0, sticky="w", pady=(3, 7))
-        self.discover_queue_listbox = tk.Listbox(
-            queue_panel, height=5, activestyle="none", relief="flat", bd=0, highlightthickness=0,
-            bg="#120D25", fg=colors["text"], selectbackground="#50377D",
-            selectforeground=colors["text"], font=("Arial", 8),
-        )
-        self.discover_queue_listbox.grid(row=2, column=0, sticky="nsew")
+        self.discover_queue_focus_frame = tk.Frame(
+            queue_panel, bg="#120D25", highlightthickness=2,
+            highlightbackground=colors["line"], highlightcolor=colors["mint"])
+        self.discover_queue_focus_frame.grid(row=2, column=0, sticky="nsew")
+        self.discover_queue_listbox = ttk.Treeview(
+            self.discover_queue_focus_frame, show="tree", selectmode="extended",
+            style="Discover.Treeview", height=5, takefocus=True)
+        self.discover_queue_listbox.pack(fill=tk.BOTH, expand=True)
+        self.discover_queue_listbox.bind(
+            "<FocusIn>", lambda _event: self.discover_queue_focus_frame.configure(
+                highlightbackground=colors["mint"]))
+        self.discover_queue_listbox.bind(
+            "<FocusOut>", lambda _event: self.discover_queue_focus_frame.configure(
+                highlightbackground=colors["line"]))
+        self.discover_queue_listbox.bind(
+            "<Double-1>", lambda _event: self._play_queue_item_direct(self.discover_queue_listbox))
+        self.discover_queue_listbox.bind(
+            "<Return>", lambda _event: self._play_queue_item_direct(self.discover_queue_listbox))
+        self.discover_queue_listbox.bind(
+            "<Delete>", lambda _event: self._remove_discover_queue_selection())
         queue_actions = tk.Frame(queue_panel, bg=colors["panel"])
         queue_actions.grid(row=3, column=0, sticky="ew", pady=(8, 0))
         tk.Button(queue_actions, text="Remove", command=self._remove_discover_queue_selection,
-                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=5,
-                  cursor="hand2", font=("Arial", 8)).pack(side=tk.LEFT)
+                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=15,
+                  cursor="hand2", takefocus=True, highlightthickness=2,
+                  highlightbackground=colors["panel"], highlightcolor=colors["mint"],
+                  font=("Arial", 8)).pack(side=tk.LEFT)
         tk.Button(queue_actions, text="Clear", command=self._clear_ktv_queue,
-                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=5,
-                  cursor="hand2", font=("Arial", 8)).pack(side=tk.LEFT, padx=(5, 0))
+                  bg=colors["panel_alt"], fg=colors["muted"], relief="flat", padx=8, pady=15,
+                  cursor="hand2", takefocus=True, highlightthickness=2,
+                  highlightbackground=colors["panel"], highlightcolor=colors["mint"],
+                  font=("Arial", 8)).pack(side=tk.LEFT, padx=(5, 0))
         tk.Button(queue_actions, text="Play queue", command=self._play_ktv_queue,
                   bg=colors["purple"], fg="white", activebackground="#8658E8",
-                  activeforeground="white", relief="flat", padx=10, pady=5,
-                  cursor="hand2", font=("Arial", 8, "bold")).pack(side=tk.RIGHT)
+                  activeforeground="white", relief="flat", padx=10, pady=15,
+                  cursor="hand2", takefocus=True, highlightthickness=2,
+                  highlightbackground=colors["panel"], highlightcolor=colors["mint"],
+                  font=("Arial", 8, "bold")).pack(side=tk.RIGHT)
 
         player = tk.Frame(parent, bg="#19132F", padx=14, pady=7,
                           highlightthickness=1, highlightbackground=colors["line"])
@@ -581,14 +616,16 @@ class KtvSelectionMixin:
         transport = tk.Frame(player, bg="#19132F")
         transport.pack(side=tk.LEFT, padx=12)
         for label, callback in [
-            ("|◀", self._play_previous_ktv_track),
-            ("▶", self._play_ktv_selected_song),
-            ("▶|", self._play_next_ktv_queue_track),
-            ("■", self._stop_ktv_playback),
+            ("⏮ Previous", self._play_previous_ktv_track),
+            ("▶ Play", self._play_ktv_selected_song),
+            ("⏭ Next", self._play_next_ktv_queue_track),
+            ("⏹ Stop", self._stop_ktv_playback),
         ]:
             tk.Button(transport, text=label, command=callback, bg="#2A2141", fg=colors["text"],
                       activebackground="#50377D", activeforeground=colors["text"],
-                      relief="flat", width=4, pady=5, cursor="hand2",
+                      relief="flat", pady=15, cursor="hand2", takefocus=True,
+                      highlightthickness=2, highlightbackground="#19132F",
+                      highlightcolor=colors["mint"],
                       font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=2)
         tk.Label(player, text="LOCAL PLAYBACK", bg="#19132F", fg=colors["mint"],
                  font=("Arial", 7, "bold")).pack(side=tk.RIGHT, padx=(10, 0))
@@ -660,12 +697,10 @@ class KtvSelectionMixin:
     def _remove_discover_queue_selection(self):
         if not hasattr(self, "discover_queue_listbox"):
             return
-        indices = self.discover_queue_listbox.curselection()
+        indices = self.discover_queue_listbox.selection()
         if not indices:
             return
-        for index in reversed(indices):
-            self.ktv_queue.pop(index)
-        self._render_ktv_queue()
+        self._remove_ktv_queue_indices(indices)
 
     # =========================================================================
     # ARTWORK & VIDEO CANVAS DRAWING CAPABILITIES
@@ -686,7 +721,13 @@ class KtvSelectionMixin:
 
         photo = ImageTk.PhotoImage(img)
         self.ktv_artwork_photo = photo
-        self.ktv_artwork_label.configure(image=photo)
+        self.ktv_artwork_label.configure(image=photo, text="")
+
+    @staticmethod
+    def _open_artwork_image(image_path):
+        with Image.open(image_path) as image:
+            image.load()
+            return image.convert("RGB")
 
     def _extract_and_cache_artwork(self, song):
         """Extract album cover or video frame snapshot and cache as image."""
@@ -702,13 +743,13 @@ class KtvSelectionMixin:
             sidecar = media_path.with_suffix(ext)
             if sidecar.is_file():
                 try:
-                    return Image.open(sidecar)
+                    return self._open_artwork_image(sidecar)
                 except Exception:
                     pass
             parent_cover = media_path.parent / f"cover{ext}"
             if parent_cover.is_file():
                 try:
-                    return Image.open(parent_cover)
+                    return self._open_artwork_image(parent_cover)
                 except Exception:
                     pass
 
@@ -718,7 +759,7 @@ class KtvSelectionMixin:
 
         if cached_thumb.is_file() and cached_thumb.stat().st_size > 0:
             try:
-                return Image.open(cached_thumb)
+                return self._open_artwork_image(cached_thumb)
             except Exception:
                 pass
 
@@ -735,7 +776,7 @@ class KtvSelectionMixin:
                 subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                creationflags=self.subp_flags, timeout=8)
                 if cached_thumb.is_file() and cached_thumb.stat().st_size > 0:
-                    return Image.open(cached_thumb)
+                    return self._open_artwork_image(cached_thumb)
             except Exception:
                 pass
 
@@ -746,27 +787,79 @@ class KtvSelectionMixin:
         if not hasattr(self, "ktv_artwork_label"):
             return
 
-        raw_img = self._extract_and_cache_artwork(song)
-        if raw_img:
+        self._artwork_request_id += 1
+        request_id = self._artwork_request_id
+        song_key = (song.get("id"), str(song.get("path", ""))) if song else None
+        self._artwork_song_key = song_key
+        self._artwork_source_image = None
+        self._set_default_artwork()
+        if song:
+            self.ktv_artwork_label.configure(
+                text="封面载入中…", compound=tk.CENTER,
+                fg=self.ktv_colors["text"])
+            request = (request_id, song_key, dict(song))
             try:
-                # Resize for thumbnail card (110x110)
-                card_img = raw_img.copy()
-                card_img.thumbnail((110, 110), Image.Resampling.LANCZOS)
-                # Ensure 110x110 square with background
-                square = Image.new("RGB", (110, 110), color="#05000c")
-                ox = (110 - card_img.width) // 2
-                oy = (110 - card_img.height) // 2
-                square.paste(card_img, (ox, oy))
-
-                photo = ImageTk.PhotoImage(square)
-                self.ktv_artwork_photo = photo
-                self.ktv_artwork_label.configure(image=photo)
-            except Exception:
-                self._set_default_artwork()
-        else:
-            self._set_default_artwork()
-
+                self._artwork_request_queue.put_nowait(request)
+            except queue.Full:
+                with suppress(queue.Empty):
+                    self._artwork_request_queue.get_nowait()
+                self._artwork_request_queue.put_nowait(request)
         self._draw_video_canvas_screen(song)
+
+    def _ktv_artwork_worker(self):
+        """Read sidecars or extract frames off the Tk thread."""
+        while True:
+            request_id, song_key, song = self._artwork_request_queue.get()
+            try:
+                image = self._extract_and_cache_artwork(song)
+                error = None if image else "找不到可读取的封面或影片关键影格。"
+            except Exception as exc:
+                image = None
+                error = f"封面读取失败：{exc}"
+            self._artwork_result_queue.put((request_id, song_key, image, error))
+
+    def _drain_ktv_artwork_results(self):
+        """Apply worker results on Tk's thread and ignore stale song selections."""
+        while True:
+            try:
+                request_id, song_key, raw_img, error = self._artwork_result_queue.get_nowait()
+            except queue.Empty:
+                break
+            if request_id != self._artwork_request_id or song_key != self._artwork_song_key:
+                continue
+            if not self.ktv_artwork_label.winfo_exists():
+                continue
+
+            if raw_img is None:
+                self._artwork_source_image = None
+                self._set_default_artwork()
+                self.ktv_artwork_label.configure(
+                    text="封面不可用", compound=tk.CENTER,
+                    fg=self.ktv_colors["text"])
+                self.ktv_selection_status_var.set(error or "封面不可用；显示默认图案。")
+            else:
+                self._artwork_source_image = raw_img
+                try:
+                    card_img = raw_img.copy()
+                    card_img.thumbnail((110, 110), Image.Resampling.LANCZOS)
+                    square = Image.new("RGB", (110, 110), color="#05000c")
+                    ox = (110 - card_img.width) // 2
+                    oy = (110 - card_img.height) // 2
+                    square.paste(card_img, (ox, oy))
+                    photo = ImageTk.PhotoImage(square)
+                    self.ktv_artwork_photo = photo
+                    self.ktv_artwork_label.configure(image=photo, text="")
+                except Exception as exc:
+                    self._artwork_source_image = None
+                    self._set_default_artwork()
+                    self.ktv_artwork_label.configure(
+                        text="封面显示失败", compound=tk.CENTER,
+                        fg=self.ktv_colors["text"])
+                    self.ktv_selection_status_var.set(f"封面显示失败：{exc}")
+
+            self._draw_video_canvas_screen(self.ktv_current_song)
+
+        self._artwork_poll_id = self.root.after(100, self._drain_ktv_artwork_results)
 
     def _draw_video_canvas_screen(self, song=None):
         """Render the 16:9 Video Playing Screen with artwork background and dynamic visuals."""
@@ -783,7 +876,8 @@ class KtvSelectionMixin:
         # 1. Background gradient or video frame snapshot
         canvas.create_rectangle(0, 0, w, h, fill="#070012", outline="")
 
-        raw_img = self._extract_and_cache_artwork(song) if song else None
+        song_key = (song.get("id"), str(song.get("path", ""))) if song else None
+        raw_img = self._artwork_source_image if song_key == self._artwork_song_key else None
         if raw_img:
             try:
                 bg_img = raw_img.copy().resize((w, h), Image.Resampling.BILINEAR)
@@ -801,25 +895,26 @@ class KtvSelectionMixin:
         canvas.create_rectangle(4, 4, w - 4, h - 4, outline="#ff007f", width=2)
         canvas.create_rectangle(6, 6, w - 6, h - 6, outline="#00ffff", width=1)
 
-        # 3. Top Status Badges
-        if self.ktv_queue_playing:
-            canvas.create_rectangle(14, 12, 115, 34, fill="#ff0055", outline="#ffd700", width=1)
-            canvas.create_text(64, 23, text="● LIVE PLAYING", fill="#ffffff", font=("Arial", 8, "bold"))
+        # 3. Top Status Badges: report process state, not unverified media playback.
+        player_running = self.ktv_preview_process is not None and self.ktv_preview_process.poll() is None
+        if player_running:
+            canvas.create_rectangle(14, 12, 158, 34, fill="#ff0055", outline="#ffd700", width=1)
+            canvas.create_text(86, 23, text="FFPLAY PROCESS RUNNING", fill="#ffffff", font=("Arial", 8, "bold"))
         else:
-            canvas.create_rectangle(14, 12, 115, 34, fill="#220040", outline="#00ffff", width=1)
-            canvas.create_text(64, 23, text="♫ MYKTV READY", fill="#00ffff", font=("Arial", 8, "bold"))
+            canvas.create_rectangle(14, 12, 158, 34, fill="#220040", outline="#00ffff", width=1)
+            canvas.create_text(86, 23, text="MYKTV VISUALIZER", fill="#00ffff", font=("Arial", 8, "bold"))
 
-        canvas.create_rectangle(w - 110, 12, w - 14, 34, fill="#120024", outline="#ff007f", width=1)
-        canvas.create_text(w - 62, 23, text="1080P KTV", fill="#ffd700", font=("Arial", 8, "bold"))
+        canvas.create_rectangle(w - 162, 12, w - 14, 34, fill="#120024", outline="#ff007f", width=1)
+        canvas.create_text(w - 88, 23, text="DECORATIVE VISUALS", fill="#ffd700", font=("Arial", 8, "bold"))
 
         # 4. Center Video Information / Karaoke Stage Display
         title = song.get("title", "") if song else ""
         artist = song.get("artist", "") if song else ""
 
         if not title:
-            canvas.create_text(w // 2, h // 2 - 20, text="🎤 MYKTV VIDEO STAGE",
+            canvas.create_text(w // 2, h // 2 - 20, text="♫ MYKTV VISUALIZER",
                                fill="#00ffff", font=("Arial", 16, "bold"))
-            canvas.create_text(w // 2, h // 2 + 15, text="请在右侧选歌，双击加入播放伫列",
+            canvas.create_text(w // 2, h // 2 + 15, text="仅显示歌曲资料与装饰效果；不代表影片画面或解析度",
                                fill="#aa99cc", font=("Arial", 11))
         else:
             canvas.create_text(w // 2, h // 2 - 25, text=f"♫ {title}",
@@ -839,14 +934,9 @@ class KtvSelectionMixin:
             canvas.create_rectangle(bx + 1, base_y - height, bx + bar_w - 2, base_y,
                                     fill="#00ffff" if i % 2 == 0 else "#ff007f", outline="")
 
-        # 6. Bottom Progress Bar & Track Info
-        canvas.create_line(20, h - 22, w - 20, h - 22, fill="#330066", width=4)
-        if self.ktv_queue_playing and self.ktv_playback_start_time > 0:
-            elapsed = time.time() - self.ktv_playback_start_time
-            progress_ratio = min(1.0, elapsed / max(1, self.ktv_estimated_duration))
-            pw = int((w - 40) * progress_ratio)
-            if pw > 0:
-                canvas.create_line(20, h - 22, 20 + pw, h - 22, fill="#00ffff", width=4)
+        # 6. Status: the embedded canvas does not read media time or resolution.
+        canvas.create_text(w // 2, h - 19, text="装饰性音效柱 · 非音频分析 · 播放进度不可读取",
+                           fill="#aa99cc", font=("Arial", 8))
 
     def _animate_visualizer(self):
         """Randomly update visualizer bars during playback for a live equalizer effect."""
@@ -857,14 +947,6 @@ class KtvSelectionMixin:
 
         # Generate realistic dance bars
         self.ktv_visualizer_bars = [random.randint(6, 38) for _ in range(24)]
-
-        # Update playback timer
-        if self.ktv_playback_start_time > 0:
-            elapsed_sec = int(time.time() - self.ktv_playback_start_time)
-            total_sec = int(self.ktv_estimated_duration)
-            e_min, e_sec = divmod(elapsed_sec, 60)
-            t_min, t_sec = divmod(total_sec, 60)
-            self.ktv_duration_var.set(f"{e_min:02d}:{e_sec:02d} / {t_min:02d}:{t_sec:02d}")
 
         self._draw_video_canvas_screen(self.ktv_current_song)
         self._visualizer_timer_id = self.root.after(150, self._animate_visualizer)
@@ -893,6 +975,61 @@ class KtvSelectionMixin:
             )
         self._render_ktv_library()
 
+    def _sync_ktv_tag_filter_options(self):
+        tags_by_key = {}
+        for song in self._song_manager_records:
+            for value in (song.get("tags") or "").split(","):
+                tag = value.strip()
+                if tag:
+                    tags_by_key.setdefault(tag.casefold(), tag)
+        tags = sorted(tags_by_key.values(), key=str.casefold)
+        if tags == self._ktv_tag_filter_values:
+            return
+
+        self._ktv_tag_filter_values = tags
+        available = {tag.casefold() for tag in tags}
+        if self.ktv_tag_filter_var.get().casefold() not in available:
+            self.ktv_tag_filter_var.set("")
+        self.ktv_tag_filter_combo.configure(
+            values=tags, state="readonly" if tags else "disabled")
+        for child in self.ktv_tag_shortcut_frame.winfo_children():
+            child.destroy()
+
+        self.ktv_tag_buttons = {}
+        self.ktv_tag_shortcut_frame.grid_columnconfigure(0, weight=1)
+        all_button = tk.Button(
+            self.ktv_tag_shortcut_frame, text="全部", relief="flat",
+            padx=4, pady=15, bg=self.ktv_colors["selected"],
+            fg=self.ktv_colors["text"], activebackground=self.ktv_colors["selected"],
+            activeforeground=self.ktv_colors["text"],
+            command=lambda: self._set_ktv_tag_filter(""),
+            font=("Arial", 8), cursor="hand2", takefocus=True,
+            highlightthickness=2, highlightbackground=self.ktv_colors["surface"],
+            highlightcolor=self.ktv_colors["mint"])
+        all_button.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        self.ktv_tag_buttons[""] = all_button
+
+        common_tags = ("Pop", "Band", "Duet", "Concert", "Ballad")
+        for column in range(3):
+            self.ktv_tag_shortcut_frame.grid_columnconfigure(column, weight=1)
+        for shortcut_index, common_tag in enumerate(common_tags, start=1):
+            actual_tag = next(
+                (tag for tag in tags if tag.casefold() == common_tag.casefold()), None)
+            if actual_tag is None:
+                continue
+            button = tk.Button(
+                self.ktv_tag_shortcut_frame, text=actual_tag, relief="flat",
+                padx=4, pady=15, bg=self.ktv_colors["input"],
+                fg=self.ktv_colors["muted"], activebackground=self.ktv_colors["selected"],
+                activeforeground=self.ktv_colors["text"],
+                command=lambda selected=actual_tag: self._set_ktv_tag_filter(selected),
+                font=("Arial", 8), cursor="hand2", takefocus=True,
+                highlightthickness=2, highlightbackground=self.ktv_colors["surface"],
+                highlightcolor=self.ktv_colors["mint"])
+            button.grid(row=shortcut_index // 3, column=shortcut_index % 3,
+                        sticky="ew", padx=2, pady=2)
+            self.ktv_tag_buttons[actual_tag] = button
+
     def _refresh_ktv_library(self):
         self._load_song_catalog(silent=False)
         self._render_ktv_library()
@@ -900,6 +1037,7 @@ class KtvSelectionMixin:
     def _render_ktv_library(self):
         if not hasattr(self, "ktv_song_tree"):
             return
+        self._sync_ktv_tag_filter_options()
         query = self.ktv_search_var.get().strip().casefold()
         language = self.ktv_language_filter_var.get()
         tag_filter = self.ktv_tag_filter_var.get().casefold()
@@ -998,49 +1136,80 @@ class KtvSelectionMixin:
         if auto_play and not self.ktv_queue_playing and first_added:
             self._stop_ktv_playback()
             self.ktv_queue_playing = True
-            self.ktv_queue_index = len(self.ktv_queue) - added
+            self.ktv_queue_index = len(self.ktv_queue) - added + 1
             self._launch_ktv_track(first_added)
         else:
             self.ktv_playback_status_var.set(f"已加入 {added} 首歌曲到播放伫列。" if added else "所选歌曲已在伫列中。")
 
     def _render_ktv_queue(self):
-        self.ktv_queue_listbox.delete(0, tk.END)
+        children = self.ktv_queue_listbox.get_children()
+        if children:
+            self.ktv_queue_listbox.delete(*children)
         for idx, song in enumerate(self.ktv_queue, start=1):
             title = song.get("title") or Path(song["path"]).stem
             artist = song.get("artist") or "Unknown Artist"
             prefix = "▶ " if (self.ktv_queue_playing and self.ktv_current_song and self.ktv_current_song.get("id") == song.get("id")) else f"{idx:02d}. "
-            self.ktv_queue_listbox.insert(tk.END, f"{prefix}{title}  -  {artist}")
+            self.ktv_queue_listbox.insert(
+                "", tk.END, iid=str(idx - 1), text=f"{prefix}{title}  -  {artist}")
         self.ktv_queue_count_var.set(f"{len(self.ktv_queue)} 首歌曲")
         if hasattr(self, "discover_queue_listbox"):
-            self.discover_queue_listbox.delete(0, tk.END)
+            children = self.discover_queue_listbox.get_children()
+            if children:
+                self.discover_queue_listbox.delete(*children)
             for idx, song in enumerate(self.ktv_queue, start=1):
                 title = song.get("title") or Path(song["path"]).stem
                 artist = song.get("artist") or "Unknown Artist"
                 prefix = "▶ " if (self.ktv_queue_playing and self.ktv_current_song and self.ktv_current_song.get("id") == song.get("id")) else f"{idx:02d}. "
-                self.discover_queue_listbox.insert(tk.END, f"{prefix} {title}  —  {artist}")
+                self.discover_queue_listbox.insert(
+                    "", tk.END, iid=str(idx - 1), text=f"{prefix} {title}  —  {artist}")
 
     def _remove_ktv_queue_selection(self):
-        indices = self.ktv_queue_listbox.curselection()
+        indices = self.ktv_queue_listbox.selection()
         if not indices:
             return
-        for idx in reversed(indices):
-            self.ktv_queue.pop(idx)
+        self._remove_ktv_queue_indices(indices)
+
+    def _remove_ktv_queue_indices(self, indices):
+        """Remove queue rows without deleting the active song or shifting the next song."""
+        selected = {int(index) for index in indices
+                    if 0 <= int(index) < len(self.ktv_queue)}
+        if not selected:
+            return
+
+        current_index = None
+        current_id = self.ktv_current_song.get("id") if self.ktv_current_song else None
+        if self.ktv_queue_playing and current_id is not None:
+            current_index = next((index for index, song in enumerate(self.ktv_queue)
+                                  if song.get("id") == current_id), None)
+
+        removals = selected - ({current_index} if current_index is not None else set())
+        next_index = self.ktv_queue_index
+        removed_before_next = sum(index < next_index for index in removals)
+        for index in sorted(removals, reverse=True):
+            self.ktv_queue.pop(index)
+        if self.ktv_queue_playing:
+            self.ktv_queue_index = max(0, next_index - removed_before_next)
+
         self._render_ktv_queue()
+        if current_index in selected:
+            self.ktv_playback_status_var.set(
+                "目前播放中的歌曲保留至播放结束；其余所选歌曲已从伫列移除。")
 
     def _clear_ktv_queue(self):
         self._stop_ktv_playback()
         self.ktv_queue.clear()
         self._render_ktv_queue()
 
-    def _play_queue_item_direct(self):
-        indices = self.ktv_queue_listbox.curselection()
+    def _play_queue_item_direct(self, listbox=None):
+        listbox = listbox or self.ktv_queue_listbox
+        indices = listbox.selection()
         if not indices:
             return
-        idx = indices[0]
+        idx = int(indices[0])
         if idx < len(self.ktv_queue):
             self._stop_ktv_playback()
             self.ktv_queue_playing = True
-            self.ktv_queue_index = idx
+            self.ktv_queue_index = idx + 1
             song = self.ktv_queue[idx]
             self._launch_ktv_track(song)
 
@@ -1054,7 +1223,9 @@ class KtvSelectionMixin:
                     self._render_ktv_queue()
                 self._stop_ktv_playback()
                 self.ktv_queue_playing = True
-                self.ktv_queue_index = 0
+                self.ktv_queue_index = next(
+                    (idx + 1 for idx, queued_song in enumerate(self.ktv_queue)
+                     if queued_song.get("id") == song.get("id")), 1)
                 self._launch_ktv_track(song)
                 return
 
@@ -1103,12 +1274,8 @@ class KtvSelectionMixin:
             self._launch_ktv_track(song)
 
     def _switch_ktv_audio_track(self):
-        """Toggle audio tracks / vocal channels (Track 1 Original / Track 2 Acc)."""
-        self.ktv_audio_channel_index = (self.ktv_audio_channel_index + 1) % 2
-        track_name = "🎤 原唱/伴奏: 声道2 (伴奏)" if self.ktv_audio_channel_index == 1 else "🎤 原唱/伴奏: 声道1 (原唱)"
-        self.ktv_track_mode_var.set(track_name)
-        if self.ktv_current_song and self.ktv_preview_process:
-            self.ktv_playback_status_var.set(f"音轨切换为：{track_name}")
+        """Report the unsupported capability without implying an audio stream changed."""
+        self.ktv_playback_status_var.set("此播放器无法可靠识别或切换歌曲内的原唱/伴奏音轨。")
 
     def _launch_ktv_track(self, song):
         ffplay_exe = self.bin_dir / "ffplay.exe"
@@ -1131,8 +1298,7 @@ class KtvSelectionMixin:
 
         self.ktv_now_playing_var.set(title)
         self.ktv_artist_var.set(f"🎤 {artist}")
-        self.ktv_playback_status_var.set("正在播放中...")
-        self.ktv_playback_start_time = time.time()
+        self.ktv_playback_status_var.set("ffplay 程序已启动；此面板无法确认实际播放进度或解析度。")
         self.ktv_queue_playing = True
 
         self._update_artwork_preview(song)
