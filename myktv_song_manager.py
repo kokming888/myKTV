@@ -7,6 +7,7 @@ from contextlib import closing
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
+from myktv_ui_tokens import MAIN_THEME
 
 
 APP_VERSION = "v1.0"
@@ -16,7 +17,8 @@ class SongManagerViewMixin:
     """Build the local catalog organizer and manage its SQLite index."""
 
     def build_song_manager_tab(self, parent):
-        colors = self.ui_colors
+        colors = dict(MAIN_THEME)
+        colors.update(getattr(self, "ui_colors", {}))
         output_dir = Path(self.config.get("output_dir", self.app_dir / "output"))
         self.song_inbox_var = tk.StringVar(value=self.config.get("song_inbox_dir", str(output_dir)))
         self.song_library_var = tk.StringVar(value=self.config.get("song_library_dir", str(output_dir / "KTV_Library")))
@@ -33,6 +35,7 @@ class SongManagerViewMixin:
         self._song_manager_records = []
         self._song_manager_scanning = False
         self._song_manager_selected_id = None
+        self._song_tag_control_values = None
 
         parent.grid_rowconfigure(3, weight=1)
         parent.grid_columnconfigure(0, weight=1)
@@ -77,12 +80,17 @@ class SongManagerViewMixin:
 
         tags_row = tk.Frame(list_panel, bg=self._bg)
         tags_row.pack(fill=tk.X, pady=(0, 5))
-        tk.Label(tags_row, text="标签", bg=self._bg, fg="gray").pack(side=tk.LEFT, padx=(2, 4))
-        for tag in ["全部", "Pop", "Band", "Duet", "Concert", "Ballad"]:
-            value = "" if tag == "全部" else tag
-            tk.Button(tags_row, text=tag, relief="flat", padx=7, pady=3,
-                bg=colors["hover"] if not value else "white", fg=self._fg,
-                command=lambda selected=value: self._set_song_tag_filter(selected)).pack(side=tk.LEFT, padx=2)
+        tk.Label(tags_row, text="标签筛选", bg=self._bg, fg="gray").pack(side=tk.LEFT, padx=(2, 4))
+        self.song_tag_shortcut_frame = tk.Frame(tags_row, bg=self._bg)
+        self.song_tag_shortcut_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.song_tag_shortcut_buttons = {}
+        self.song_tag_filter_combo = ttk.Combobox(
+            tags_row, textvariable=self.song_tag_filter_var, values=[],
+            state="disabled", width=18)
+        self.song_tag_filter_combo.pack(side=tk.RIGHT, padx=3)
+        self.song_tag_filter_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._set_song_tag_filter(self.song_tag_filter_var.get()))
         tk.Button(tags_row, text="＋ 加标签", command=self._add_tags_to_selected,
             bg="#f0f0f0", relief="flat", padx=7, pady=3).pack(side=tk.RIGHT, padx=2)
 
@@ -177,6 +185,45 @@ class SongManagerViewMixin:
         self.song_tag_filter_var.set(tag)
         self._render_song_catalog()
 
+    def _refresh_song_tag_filter_options(self):
+        tags_by_key = {}
+        for song in self._song_manager_records:
+            for value in (song.get("tags") or "").split(","):
+                tag = value.strip()
+                if tag:
+                    tags_by_key.setdefault(tag.casefold(), tag)
+        tags = sorted(tags_by_key.values(), key=str.casefold)
+        if tags == self._song_tag_control_values:
+            return
+
+        self._song_tag_control_values = tags
+        available = {tag.casefold() for tag in tags}
+        if self.song_tag_filter_var.get().casefold() not in available:
+            self.song_tag_filter_var.set("")
+        self.song_tag_filter_combo.configure(
+            values=tags, state="readonly" if tags else "disabled")
+        for child in self.song_tag_shortcut_frame.winfo_children():
+            child.destroy()
+
+        self.song_tag_shortcut_buttons = {}
+        all_button = tk.Button(
+            self.song_tag_shortcut_frame, text="全部", relief="flat",
+            padx=7, pady=3, bg=self.ui_colors["hover"], fg=self._fg,
+            command=lambda: self._set_song_tag_filter(""))
+        all_button.pack(side=tk.LEFT, padx=2)
+        self.song_tag_shortcut_buttons[""] = all_button
+        for common_tag in ("Pop", "Band", "Duet", "Concert", "Ballad"):
+            actual_tag = next(
+                (tag for tag in tags if tag.casefold() == common_tag.casefold()), None)
+            if actual_tag is None:
+                continue
+            button = tk.Button(
+                self.song_tag_shortcut_frame, text=actual_tag, relief="flat",
+                padx=7, pady=3, bg="white", fg=self._fg,
+                command=lambda selected=actual_tag: self._set_song_tag_filter(selected))
+            button.pack(side=tk.LEFT, padx=2)
+            self.song_tag_shortcut_buttons[actual_tag] = button
+
     def _load_song_catalog(self, silent=False):
         db_path = self._song_catalog_path()
         if not db_path.exists():
@@ -196,6 +243,7 @@ class SongManagerViewMixin:
     def _render_song_catalog(self):
         if not hasattr(self, "song_tree"):
             return
+        self._refresh_song_tag_filter_options()
         query = self.song_search_var.get().strip().casefold()
         language_filter = self.song_language_filter_var.get()
         tag_filter = self.song_tag_filter_var.get().casefold()
